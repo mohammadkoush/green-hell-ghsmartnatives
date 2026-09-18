@@ -102,7 +102,7 @@ namespace GHSmartNatives
         {
             private static void Prefix(AIs.HumanAIGroup __instance)
             {
-                if (NumbersOn() && Ours(__instance) && !__instance.IsPatrol()) s_Asking = __instance;
+                if (NumbersOn() && Ours(__instance) && !__instance.IsPatrol() && !__instance.IsWave()) s_Asking = __instance;
             }
             private static void Postfix() { s_Asking = null; }
         }
@@ -112,7 +112,7 @@ namespace GHSmartNatives
         {
             private static void Prefix(AIs.HumanAIGroup __instance)
             {
-                if (NumbersOn() && Ours(__instance) && !__instance.IsPatrol()) s_Asking = __instance;
+                if (NumbersOn() && Ours(__instance) && !__instance.IsPatrol() && !__instance.IsWave()) s_Asking = __instance;
             }
             private static void Postfix() { s_Asking = null; }
         }

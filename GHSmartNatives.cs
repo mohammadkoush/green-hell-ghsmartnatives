@@ -46,7 +46,7 @@ namespace GHSmartNatives
     {
         public const string Guid    = "com.mohammadkoush.ghsmartnatives";
         public const string Name    = "GHSmartNatives";
-        public const string Version = "1.0.0";
+        public const string Version = "1.0.1";
 
         private static GHSmartNativesPlugin s_Self;
         private Harmony _harmony;
@@ -463,11 +463,62 @@ namespace GHSmartNatives
             return true;
         }
 
-        private static Player HuntablePlayer()
+        /// <summary>
+        /// The Being the game itself hands to EnemyModule.SetEnemy - and NOT Player.Get().
+        ///
+        /// FIRST RUN, 25,781 NullReferenceExceptions in EnemyModule.UpdateEnemy, one per native per
+        /// frame from the moment the notice fired, and every native stood in a T-pose taking hits
+        /// without moving: an exception in UpdateModules ends UpdateMe before goals or animation
+        /// run. Read from UpdateEnemy's IL: its candidates are
+        /// ReplicatedLogicalPlayer.s_AllLogicalPlayers[i].GetComponent<Being>(), and it then calls
+        /// m_Enemy.GetComponent<ReplicatedLogicalPlayer>().GetCoopStatus() and
+        /// m_Enemy.GetComponent<ReplicatedPlayerParams>().m_IsIgnoredByAI on whatever it holds. The
+        /// Player component I handed it lives on an object without those two, so both dereferences
+        /// were null. The right Being is the logical player's, checked here for exactly the two
+        /// components UpdateEnemy will read, so a wrong object is refused with a log line instead
+        /// of freezing every native on the island.
+        /// </summary>
+        private static Being s_Target;
+        private static bool  s_TargetRefused;
+
+        private static Being HuntTarget()
         {
-            Player p = Player.Get();
-            if (p == null || p.IsDead() || p.IsIgnoredByAI()) return null;
-            return p;
+            try
+            {
+                if (s_Target == null)
+                {
+                    ReplicatedLogicalPlayer rlp = ReplicatedLogicalPlayer.s_LocalLogicalPlayer;
+                    Being b = (rlp != null) ? rlp.GetComponent<Being>() : null;
+                    if (b == null) return null;
+                    if (b.GetComponent<ReplicatedLogicalPlayer>() == null || b.GetComponent<ReplicatedPlayerParams>() == null)
+                    {
+                        if (!s_TargetRefused && s_Self != null)
+                        {
+                            s_TargetRefused = true;
+                            s_Self.Logger.LogError("hunt: the local player's Being '" + b.name + "' lacks ReplicatedLogicalPlayer or "
+                                + "ReplicatedPlayerParams - the game's EnemyModule would throw on it every frame, so no native is "
+                                + "pointed at it. Hunt is effectively off; the game's own sight/hearing still works.");
+                        }
+                        return null;
+                    }
+                    s_Target = b;
+                    if (s_Self != null) s_Self.Logger.LogInfo("hunt: target is '" + b.name + "' (" + b.GetType().Name + ")"
+                        + (Player.Get() != null && ReferenceEquals(Player.Get(), b) ? " - the Player itself" : " - not the Player component"));
+                }
+                if (s_Target.IsDead() || s_Target.IsIgnoredByAI()) return null;
+                return s_Target;
+            }
+            catch (Exception ex)
+            {
+                if (s_Self != null) s_Self.HuntLog("target lookup failed: " + ex.Message);
+                return null;
+            }
+        }
+
+        /// <summary>Would EnemyModule.UpdateEnemy survive this enemy? The two components it dereferences.</summary>
+        private static bool SafeEnemy(Being b)
+        {
+            return b != null && b.GetComponent<ReplicatedLogicalPlayer>() != null && b.GetComponent<ReplicatedPlayerParams>() != null;
         }
 
         private static float ClosestMember(AIs.HumanAIGroup g, Vector3 pos)

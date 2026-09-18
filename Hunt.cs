@@ -123,7 +123,7 @@ namespace GHSmartNatives
                     if (__instance.m_State == AIs.HumanAIGroup.State.Attack) return;
                     if (__instance.m_Members == null || __instance.m_Members.Count == 0) return;
 
-                    Player p = HuntablePlayer();
+                    Being p = HuntTarget();
                     if (p == null) return;
                     float d = ClosestMember(__instance, p.transform.position);
                     if (d > s_Self._huntRadius.Value) return;
@@ -161,7 +161,7 @@ namespace GHSmartNatives
                     if (__instance.m_State != AIs.HumanAIGroup.State.Attack) return;
                     if (__instance.m_Members == null) return;
 
-                    Player p = HuntablePlayer();
+                    Being p = HuntTarget();
                     if (p == null) return;
                     float d = ClosestMember(__instance, p.transform.position);
                     if (d > s_Self._keepRadius.Value)
@@ -194,6 +194,33 @@ namespace GHSmartNatives
 
         private class SenseOriginal { public float DistToLose; public float TimeToLose; public bool HasTime; }
         private readonly Dictionary<AIs.HumanAI, SenseOriginal> _senseOrig = new Dictionary<AIs.HumanAI, SenseOriginal>();
+
+        /// <summary>
+        /// THE SELF-HEAL for the first-run freeze: any member holding an enemy that lacks the two
+        /// components EnemyModule.UpdateEnemy dereferences is cleared, and said so. Whoever set it -
+        /// this mod, another mod, a save - the native is unfrozen on the next frame instead of
+        /// standing in a T-pose for the rest of the session.
+        /// </summary>
+        private static int s_Healed;
+        private void HealBadEnemies(AIs.HumanAIGroup g)
+        {
+            if (g.m_Members == null) return;
+            for (int i = 0; i < g.m_Members.Count; i++)
+            {
+                AIs.HumanAI m = g.m_Members[i];
+                if (m == null || m.m_EnemyModule == null) continue;
+                Being e = m.m_EnemyModule.m_Enemy;
+                if (e == null || SafeEnemy(e)) continue;
+                m.m_EnemyModule.SetEnemy(null);
+                m.m_EnemyModule.m_PriorityEnemy = null;
+                if (s_Healed < 5)
+                {
+                    s_Healed++;
+                    Logger.LogWarning("heal: '" + m.name + "' held enemy '" + e.name + "' which the game's EnemyModule cannot "
+                        + "read (no ReplicatedLogicalPlayer / ReplicatedPlayerParams) - cleared it so the native moves again");
+                }
+            }
+        }
 
         private void ApplySensesTo(AIs.HumanAIGroup g)
         {
@@ -259,7 +286,7 @@ namespace GHSmartNatives
             if (g.m_Members == null) return;
 
             float now = Time.time;
-            Player p = HuntablePlayer();
+            Being p = HuntTarget();
             for (int i = 0; i < g.m_Members.Count; i++)
             {
                 AIs.HumanAI m = g.m_Members[i];
@@ -359,7 +386,9 @@ namespace GHSmartNatives
                 if (s_Self == null) return;
                 try
                 {
-                    if (!Ours(__instance) || !__instance.m_Active) return;
+                    if (!__instance.m_Active) return;
+                    s_Self.HealBadEnemies(__instance);          // every group, ours or not
+                    if (!Ours(__instance)) return;
                     s_Self.ApplySensesTo(__instance);
                     s_Self.RoamTick(__instance);
                 }

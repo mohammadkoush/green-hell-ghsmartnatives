@@ -132,7 +132,7 @@ namespace GHSmartNatives
 
                     Being p = HuntTarget();
                     if (p == null) return;
-                    float d = ClosestMember(__instance, p.transform.position);
+                    float d = ClosestMember(__instance, p.transform.position, true);
                     if (d > s_Self._huntRadius.Value) return;
 
                     int armed = 0;
@@ -334,6 +334,7 @@ namespace GHSmartNatives
             float now = Time.time;
             Being p = HuntTarget();
             ReadSenses(g, p);
+            AssignScouts(g);
             SeenMemo seen;
             bool hasLead = s_Seen.TryGetValue(g, out seen) && (now - seen.At) < _forgetSecs.Value;
             for (int i = 0; i < g.m_Members.Count; i++)
@@ -351,6 +352,8 @@ namespace GHSmartNatives
                     st.NextAt = now;                      // the first spot comes at once - no sitting
                     _roam[m] = st;
                 }
+
+                if (ScoutStep(g, m, st, p, now)) continue;           // a scout walks its own walk
 
                 Vector3 here = m.transform.position;
                 bool arrived = Vector3.Distance(here, m.m_StartPosition) < 3f;
@@ -416,6 +419,7 @@ namespace GHSmartNatives
                 foreach (AIs.HumanAI k in _roam.Keys) if (k == null) gone.Add(k);
                 foreach (AIs.HumanAI k in _senseOrig.Keys) if (k == null && !gone.Contains(k)) gone.Add(k);
                 for (int i = 0; i < gone.Count; i++) { _roam.Remove(gone[i]); _senseOrig.Remove(gone[i]); }
+                SweepScouts();
             }
         }
         private static int s_RoamLogged;

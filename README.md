@@ -13,6 +13,11 @@ each on its own switch, all through the game's own AI:
   last **saw or heard** you, sweep a widening circle there, and give up after a while — never toward
   where you actually are. With nothing to go on they wander the camp. The game's own rest behaviour
   does the walking, so the animation and pathing are the game's.
+- **Scouts.** Each calm camp sends one member out (its hunter, when it has one) to range far
+  around the camp with long, persistent steps, looking for you. A scout does not count for the
+  camp's notice radius: it has to see you, or walk into you. When it does, it turns for home at a
+  run, the camp remembers where you were, and a wave is spawned at your position (once per
+  cooldown). A scout hangs back in any fight.
 - **Tactics.** Archers (hunters) hold their distance and throw while the others close in; the Thug
   waits at a distance until you are surrounded, a member is lost, or a timer runs out — then comes.
 - **Alarm.** A camp that starts hunting calls every calm camp within range into it. Each camp wakes
@@ -50,6 +55,9 @@ panel too.
 | `Roam.SearchRadiusMetres` | 60 | how wide the sweep around the last sighting grows |
 | `Roam.ForgetSeconds` | 120 | no sighting or sound for this long ends the search |
 | `Roam.StepMetres` | 12 | how long each searching step is |
+| `Scouts.ScoutsPerCamp` / `ScoutRadiusMetres` | 1 / 80 | how many go out, how far they range |
+| `Scouts.ScoutCallsWave` / `WaveCooldownSeconds` | on / 180 | the wave a sighting brings |
+| `Scouts.ScoutAlarmsCamp` | off | a sighting also brings the camp and its neighbours |
 | `Tactics.ArcherKeepMetres` | 10 | hunters back off below this and never walk in past it |
 | `Tactics.BossWaitsForSurround` / `BossKeepMetres` | on / 14 | the Thug waits here |
 | `Tactics.SurroundedCount` / `BossWaitMaxSeconds` | 2 / 45 | what releases the Thug |

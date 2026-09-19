@@ -78,6 +78,7 @@ namespace GHSmartNatives
             if (s_Self == null || !s_Self._tacticsEnabled.Value) return false;
             AIs.HumanAI h = ai as AIs.HumanAI;
             if (h == null || h.m_Group == null || !Ours(h.m_Group)) return false;
+            if (IsScout(h)) { keep = s_Self._scoutKeep.Value; return true; }
             if (IsArcher(ai)) { keep = s_Self._archerKeep.Value; return true; }
             if (IsBoss(ai) && s_Self._bossHolds.Value)
             {

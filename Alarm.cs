@@ -249,7 +249,14 @@ namespace GHSmartNatives
             private static void Postfix(AIs.HumanAIGroup __instance)
             {
                 if (s_Self == null) return;
-                try { s_Self.RemoveTraps(__instance); s_Attack.Remove(__instance); s_Seen.Remove(__instance); }
+                try
+                {
+                    s_Self.RemoveTraps(__instance); s_Attack.Remove(__instance); s_Seen.Remove(__instance);
+                    s_LastScoutWave.Remove(__instance);
+                    List<AIs.HumanAI> ex = new List<AIs.HumanAI>();
+                    foreach (AIs.HumanAI k in s_Scouts.Keys) if (k == null || k.m_Group == __instance) ex.Add(k);
+                    for (int i = 0; i < ex.Count; i++) s_Scouts.Remove(ex[i]);
+                }
                 catch (Exception) { }
             }
         }

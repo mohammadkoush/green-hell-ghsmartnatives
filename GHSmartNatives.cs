@@ -46,7 +46,7 @@ namespace GHSmartNatives
     {
         public const string Guid    = "com.mohammadkoush.ghsmartnatives";
         public const string Name    = "GHSmartNatives";
-        public const string Version = "1.1.0";
+        public const string Version = "1.2.0";
 
         private static GHSmartNativesPlugin s_Self;
         private Harmony _harmony;
@@ -77,6 +77,7 @@ namespace GHSmartNatives
             BindRoamConfig();
             BindTacticsConfig();
             BindAlarmConfig();
+            BindScoutConfig();
             BindNumbersConfig();
 
             try
@@ -274,6 +275,21 @@ namespace GHSmartNatives
                 _roamEveryMin.Value = Slider("A spot never reached is replaced after", _roamEveryMin.Value, 3f, 120f, " s", 0);
                 _roamEveryMax.Value = Slider("...and no later than", _roamEveryMax.Value, 5f, 240f, " s", 0);
                 if (_roamEveryMax.Value < _roamEveryMin.Value) _roamEveryMax.Value = _roamEveryMin.Value;
+            }
+
+            GUILayout.Space(8f);
+            GUILayout.Label("Scouts", _head);
+            bool sco = _scoutsEnabled.Value;
+            if (Row("Camps send scouts out - they look for you, back off, and call a wave", sco) != sco) _scoutsEnabled.Value = !sco;
+            if (_scoutsEnabled.Value)
+            {
+                _scoutsPerCamp.Value = Mathf.RoundToInt(Slider("Scouts per camp", _scoutsPerCamp.Value, 0f, 3f, "", 0));
+                _scoutRadius.Value = Slider("A scout ranges this far from camp", _scoutRadius.Value, 20f, 300f, " m", 0);
+                bool sw = _scoutWave.Value;
+                if (Row("A scout that finds you calls a wave", sw) != sw) _scoutWave.Value = !sw;
+                if (_scoutWave.Value) _scoutWaveCooldown.Value = Slider("Not another wave from that camp within", _scoutWaveCooldown.Value, 30f, 900f, " s", 0);
+                bool sa = _scoutAlarmsCamp.Value;
+                if (Row("...and brings its own camp too", sa) != sa) _scoutAlarmsCamp.Value = !sa;
             }
 
             GUILayout.Space(8f);
@@ -556,7 +572,9 @@ namespace GHSmartNatives
             return b != null && b.GetComponent<ReplicatedLogicalPlayer>() != null && b.GetComponent<ReplicatedPlayerParams>() != null;
         }
 
-        private static float ClosestMember(AIs.HumanAIGroup g, Vector3 pos)
+        private static float ClosestMember(AIs.HumanAIGroup g, Vector3 pos) { return ClosestMember(g, pos, false); }
+
+        private static float ClosestMember(AIs.HumanAIGroup g, Vector3 pos, bool skipScouts)
         {
             float best = float.MaxValue;
             if (g == null || g.m_Members == null) return best;
@@ -564,6 +582,7 @@ namespace GHSmartNatives
             {
                 AIs.HumanAI m = g.m_Members[i];
                 if (m == null) continue;
+                if (skipScouts && IsScout(m)) continue;
                 float d = Vector3.Distance(m.transform.position, pos);
                 if (d < best) best = d;
             }

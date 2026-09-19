@@ -259,6 +259,32 @@ namespace GHSmartNatives
             if (gone.Count > 0 && s_TrapLogged < 8) { s_TrapLogged++; Logger.LogInfo("traps: " + gone.Count + " left behind, removed"); }
         }
 
+        // THEIRS, NOT HIS. His words: "the trap should not be removed by the player or interacted
+        // with." A native trap offers no actions to the crosshair (no take, no arm, no deconstruct)
+        // and cannot be triggered by hand; walking into it is the only thing it answers to, and
+        // that path (OnEnterTrigger) does not go through CanTrigger.
+        [HarmonyPatch(typeof(BowTrap), "CanTrigger")]
+        private static class Patch_NativeTrapCannotBeHandled
+        {
+            private static bool Prefix(BowTrap __instance, ref bool __result)
+            {
+                if (!s_Traps.ContainsKey(__instance)) return true;
+                __result = false;
+                return false;
+            }
+        }
+
+        [HarmonyPatch(typeof(BowTrap), "GetActions")]
+        private static class Patch_NativeTrapOffersNothing
+        {
+            private static bool Prefix(BowTrap __instance, List<TriggerAction.TYPE> actions)
+            {
+                if (!s_Traps.ContainsKey(__instance)) return true;
+                if (actions != null) actions.Clear();
+                return false;
+            }
+        }
+
         private void RemoveTraps(AIs.HumanAIGroup g)
         {
             List<BowTrap> gone = new List<BowTrap>();

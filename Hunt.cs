@@ -70,9 +70,16 @@ namespace GHSmartNatives
             _huntEnabled = Config.Bind("Hunt", "Enabled", true,
                 "A camp that has you within reach notices you and comes for you, instead of waiting " +
                 "for you to walk into it.");
-            _huntRadius = Config.Bind("Hunt", "NoticeRadiusMetres", 45f,
+            // 20, NOT 45, AND THE KEY IS RENAMED so the new default reaches his cfg. The log of the
+            // session with no scouts, no roaming and no trap ever tripped: every notice fired at
+            // 37-45 m - the moment the camp woke (EnemyAISpawnManager.m_MaxActivationDistance is
+            // logged below the first time a camp is seen). A camp noticed at activation goes to
+            // Attack in the same frame and is never Calm, and everything that lives in Calm -
+            // roaming, scouts, the traps as a line you can cross - never runs.
+            _huntRadius = Config.Bind("Hunt", "NoticeRadiusMetresV2", 20f,
                 new ConfigDescription("How close you can get to any member of a calm camp before " +
-                    "they notice you and attack.", new AcceptableValueRange<float>(5f, 200f)));
+                    "they notice you and attack. Keep it well under the distance a camp wakes at " +
+                    "(about 40 m) or the camp is never calm.", new AcceptableValueRange<float>(5f, 200f)));
             _keepRadius = Config.Bind("Hunt", "KeepHuntingRadiusMetres", 80f,
                 new ConfigDescription("While you are within this distance of any member, a hunting " +
                     "group does not calm down and anyone who lost you is pointed at you again.",
@@ -116,6 +123,7 @@ namespace GHSmartNatives
         // -----------------------------------------------------------------------------------------
 
         private static readonly Dictionary<AIs.HumanAIGroup, float> s_NoticedAt = new Dictionary<AIs.HumanAIGroup, float>();
+        private static bool s_ActivationSaid;
 
         [HarmonyPatch(typeof(AIs.HumanAIGroup), "ShouldSetAttackState")]
         private static class Patch_Notice
@@ -148,6 +156,18 @@ namespace GHSmartNatives
                     __result = true;
                     s_NoticedAt[__instance] = Time.time;
                     RememberSeen(__instance, p.transform.position);
+                    if (!s_ActivationSaid)
+                    {
+                        s_ActivationSaid = true;
+                        try
+                        {
+                            AIs.EnemyAISpawnManager mgr = AIs.EnemyAISpawnManager.Get();
+                            if (mgr != null) s_Self.Logger.LogInfo("hunt: camps wake at " + mgr.m_MaxActivationDistance.ToString("F0")
+                                + " m and sleep at " + AIs.EnemyAISpawnManager.s_DeactivationDist.ToString("F0") + " m; notice radius is "
+                                + s_Self._huntRadius.Value.ToString("F0") + " m");
+                        }
+                        catch (Exception) { }
+                    }
                     s_Self.Say("Natives noticed you - " + armed + " coming from " + Mathf.RoundToInt(d) + " m");
                     s_Self.Logger.LogInfo("hunt: group '" + __instance.name + "' (" + armed + ") noticed you at "
                         + d.ToString("F0") + " m - attack state");

@@ -38,6 +38,7 @@ namespace GHSmartNatives
         private ConfigEntry<float> _trapRing;
         private ConfigEntry<bool>  _trapsArmed;
         private ConfigEntry<float> _trapsForget;
+        private ConfigEntry<float> _trapTrip;
 
         private void BindAlarmConfig()
         {
@@ -59,6 +60,9 @@ namespace GHSmartNatives
                 new ConfigDescription("A camp's traps stay after the camp is wiped or asleep, until you are " +
                     "this far from them. His test: 'I thought I saw a trap, but I could not find it after " +
                     "the fight' - they used to go with the camp.", new AcceptableValueRange<float>(30f, 500f)));
+            _trapTrip = Config.Bind("Alarm", "TrapTripMetres", 1.2f,
+                new ConfigDescription("Standing this close to a native trap trips it, whether or not the " +
+                    "game's own trigger fires.", new AcceptableValueRange<float>(0.5f, 4f)));
             _trapsArmed = Config.Bind("Alarm", "TrapsHaveArrows", true,
                 "The traps carry a tribe arrow and shoot, like the game's own. Off: they only ring " +
                 "the alarm.");
@@ -233,6 +237,53 @@ namespace GHSmartNatives
                     else s_Self.CallNeighbours(g, obj.transform.position);       // the camp is gone; its neighbours are not
                 }
                 catch (Exception ex) { s_Self.HuntLog("trap trip failed: " + ex.Message); }
+            }
+        }
+
+        // TRIPPED BY DISTANCE AS WELL. His test: "Can't trigger the trap." No 'trap tripped' line in
+        // the log. The game's TrapTrigger needs its collider entered; whether that happens on a
+        // trap made outside the item registry I cannot see from here, so the alarm no longer waits
+        // for it: standing within TrapTripMetres of a native trap trips it. The arrow, if any, is
+        // still the game's to shoot through its own trigger.
+        private float _trapTripAt;
+        private static readonly Dictionary<BowTrap, float> s_TrippedAt = new Dictionary<BowTrap, float>();
+
+        private void TrapTripByDistance()
+        {
+            if (Time.time - _trapTripAt < 0.2f || s_Traps.Count == 0) return;
+            _trapTripAt = Time.time;
+            Player p = Player.Get();
+            if (p == null) return;
+            foreach (KeyValuePair<BowTrap, AIs.HumanAIGroup> kv in s_Traps)
+            {
+                BowTrap t = kv.Key;
+                if (t == null) continue;
+                float last;
+                if (s_TrippedAt.TryGetValue(t, out last) && Time.time - last < 20f) continue;
+                if (Vector3.Distance(t.transform.position, p.transform.position) > _trapTrip.Value) continue;
+                s_TrippedAt[t] = Time.time;
+                Say("You tripped a native trap - the camp is alarmed");
+                AIs.HumanAIGroup g = kv.Value;
+                if (g != null && g.m_Active) Alarm(g, p.transform.position, "trap tripped (by distance)", true);
+                else CallNeighbours(g, p.transform.position);
+                return;
+            }
+        }
+
+        [HarmonyPatch(typeof(TrapTrigger), "OnTriggerEnter")]
+        private static class Patch_TrapTriggerEvidence
+        {
+            private static void Postfix(TrapTrigger __instance, Collider other)
+            {
+                try
+                {
+                    BowTrap bt = __instance.GetComponentInParent<BowTrap>();
+                    if (bt == null || !s_Traps.ContainsKey(bt) || s_TrapLogged >= 8) return;
+                    s_TrapLogged++;
+                    s_Self.Logger.LogInfo("traps: trigger entered by '" + (other != null ? other.gameObject.name : "?") + "' player="
+                        + (other != null && GameObjectExtension.IsPlayer(other.gameObject)));
+                }
+                catch (Exception) { }
             }
         }
 

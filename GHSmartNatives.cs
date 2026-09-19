@@ -46,7 +46,7 @@ namespace GHSmartNatives
     {
         public const string Guid    = "com.mohammadkoush.ghsmartnatives";
         public const string Name    = "GHSmartNatives";
-        public const string Version = "1.2.2";
+        public const string Version = "1.3.0";
 
         private static GHSmartNativesPlugin s_Self;
         private Harmony _harmony;
@@ -143,6 +143,7 @@ namespace GHSmartNatives
                 if (!GameIsPlayable()) return;
                 NumbersTick();
                 TrapSweep();
+                TrapTripByDistance();
                 if (_key.Value.IsDown()) SetOpen(!_open);
                 if (_open && Input.GetKeyDown(KeyCode.Escape)) SetOpen(false);
             }

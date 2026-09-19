@@ -190,6 +190,7 @@ namespace GHSmartNatives
                 try
                 {
                     if (!NumbersOn()) return;
+                    if (s_BossEscort) { count = 1; return; }
                     int was = count;
                     count = s_Self.Roll();
                     s_Self.NumbersLog("wave: " + was + " -> " + count);
@@ -200,6 +201,49 @@ namespace GHSmartNatives
 
         private static AIs.HumanAIWave s_BossWave;     // the wave being spawned that must hold a boss
         private static bool s_BossGiven;
+        private static bool s_BossEscort;              // a wave of one, spawned to be the Thug of a camp's own wave
+        private static AIs.HumanAIWave s_EscortWave;   // that wave, once the game has made it
+
+        [HarmonyPatch(typeof(AIs.EnemyAISpawnManager), "SpawnWave")]
+        private static class Patch_RememberEscort
+        {
+            private static void Postfix(AIs.HumanAIWave __result)
+            {
+                if (s_BossEscort && __result != null) s_EscortWave = __result;
+            }
+        }
+
+        // THE CAMP'S OWN WAVE. His test: "at least four to five waves have passed with no thugs" -
+        // and the log has not one 'numbers: wave' line. Read from UpdateWaves: when a camp group is
+        // active the game does not SpawnWave at all - it sends the camp itself with
+        // HumanAIGroup.StartWave(firecamp), and the Thug roll lives only in HumanAIWave. So when a
+        // camp of BossFromCount or more starts its wave without a Thug among them, a wave of ONE is
+        // asked of the game at the same firecamp, flagged so the count stays one and the one is
+        // the Thug. Everything else about it is the game's.
+        [HarmonyPatch(typeof(AIs.HumanAIGroup), "StartWave")]
+        private static class Patch_CampWaveBoss
+        {
+            private static void Postfix(AIs.HumanAIGroup __instance, FirecampGroup group)
+            {
+                try
+                {
+                    if (!NumbersOn() || s_Self._bossFrom.Value <= 0) return;
+                    if (__instance == null || __instance.IsWave() || !Ours(__instance)) return;
+                    if (__instance.m_Members == null || __instance.m_Members.Count < s_Self._bossFrom.Value) return;
+                    for (int i = 0; i < __instance.m_Members.Count; i++) if (IsBoss(__instance.m_Members[i])) return;
+                    AIs.EnemyAISpawnManager mgr = AIs.EnemyAISpawnManager.Get();
+                    if (mgr == null) return;
+                    s_BossEscort = true;
+                    AIs.HumanAIWave w = null;
+                    try { w = mgr.SpawnWave(1, false, group); }
+                    finally { s_BossEscort = false; }
+                    s_Self.NumbersLog("camp '" + __instance.name + "' (" + __instance.m_Members.Count + ") sends its wave - a Thug "
+                        + (w != null ? "is sent with it" : "could not be sent (the game declined)"));
+                    if (w != null) s_Self.Say("A wave of " + __instance.m_Members.Count + " - with a boss");
+                }
+                catch (Exception ex) { s_Self.NumbersLog("camp wave boss failed: " + ex.Message); }
+            }
+        }
 
         [HarmonyPatch(typeof(AIs.HumanAIWave), "TrySpawnWave")]
         private static class Patch_BossWave
@@ -210,7 +254,8 @@ namespace GHSmartNatives
                 try
                 {
                     if (!NumbersOn() || s_Self._bossFrom.Value <= 0) return;
-                    if (__instance == null || __instance.m_Count < s_Self._bossFrom.Value) return;
+                    if (__instance == null) return;
+                    if (__instance.m_Count < s_Self._bossFrom.Value && s_EscortWave != __instance) return;
                     s_BossWave = __instance;
                 }
                 catch (Exception) { }

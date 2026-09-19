@@ -37,6 +37,7 @@ namespace GHSmartNatives
         private ConfigEntry<int>   _trapsPerCamp;
         private ConfigEntry<float> _trapRing;
         private ConfigEntry<bool>  _trapsArmed;
+        private ConfigEntry<float> _trapsForget;
 
         private void BindAlarmConfig()
         {
@@ -54,6 +55,10 @@ namespace GHSmartNatives
             _trapRing = Config.Bind("Alarm", "TrapRingMetres", 18f,
                 new ConfigDescription("How far from the camp's centre the ring sits.",
                     new AcceptableValueRange<float>(6f, 40f)));
+            _trapsForget = Config.Bind("Alarm", "TrapsVanishBeyondMetres", 150f,
+                new ConfigDescription("A camp's traps stay after the camp is wiped or asleep, until you are " +
+                    "this far from them. His test: 'I thought I saw a trap, but I could not find it after " +
+                    "the fight' - they used to go with the camp.", new AcceptableValueRange<float>(30f, 500f)));
             _trapsArmed = Config.Bind("Alarm", "TrapsHaveArrows", true,
                 "The traps carry a tribe arrow and shoot, like the game's own. Off: they only ring " +
                 "the alarm.");
@@ -96,12 +101,12 @@ namespace GHSmartNatives
             for (int i = 0; i < AIs.HumanAIGroup.s_AIGroups.Count; i++)
             {
                 AIs.HumanAIGroup o = AIs.HumanAIGroup.s_AIGroups[i];
-                if (o == null || o == caller || !o.m_Active || !Ours(o) || o.IsWave()) continue;
+                if (o == null || (caller != null && o == caller) || !o.m_Active || !Ours(o) || o.IsWave()) continue;
                 if (o.m_State == AIs.HumanAIGroup.State.Attack) continue;
                 if (o.m_Members == null || o.m_Members.Count == 0) continue;
                 float d = ClosestMember(o, where);
                 if (d > _callRadius.Value) continue;
-                Alarm(o, where, "called by '" + caller.name + "' from " + Mathf.RoundToInt(d) + " m", false);
+                Alarm(o, where, "called by '" + (caller != null ? caller.name : "a wiped camp's trap") + "' from " + Mathf.RoundToInt(d) + " m", false);
                 answered++;
             }
             if (answered > 0 && Time.time - s_LastCallAt > 5f)
@@ -223,12 +228,35 @@ namespace GHSmartNatives
                     AIs.HumanAIGroup g;
                     if (!s_Traps.TryGetValue(__instance, out g)) return;
                     if (obj == null || !GameObjectExtension.IsPlayer(obj)) return;
-                    if (g == null) { s_Traps.Remove(__instance); return; }
                     s_Self.Say("You tripped a native trap - the camp is alarmed");
-                    s_Self.Alarm(g, obj.transform.position, "trap tripped", true);
+                    if (g != null && g.m_Active) s_Self.Alarm(g, obj.transform.position, "trap tripped", true);
+                    else s_Self.CallNeighbours(g, obj.transform.position);       // the camp is gone; its neighbours are not
                 }
                 catch (Exception ex) { s_Self.HuntLog("trap trip failed: " + ex.Message); }
             }
+        }
+
+        private float _trapSweepAt;
+
+        /// <summary>Called from Update: traps far behind him go, whoever's camp they were.</summary>
+        private void TrapSweep()
+        {
+            if (Time.time - _trapSweepAt < 5f || s_Traps.Count == 0) return;
+            _trapSweepAt = Time.time;
+            Player p = Player.Get();
+            if (p == null) return;
+            List<BowTrap> gone = new List<BowTrap>();
+            foreach (KeyValuePair<BowTrap, AIs.HumanAIGroup> kv in s_Traps)
+            {
+                if (kv.Key == null) { gone.Add(kv.Key); continue; }
+                if (Vector3.Distance(kv.Key.transform.position, p.transform.position) > _trapsForget.Value) gone.Add(kv.Key);
+            }
+            for (int i = 0; i < gone.Count; i++)
+            {
+                try { if (gone[i] != null) UnityEngine.Object.Destroy(gone[i].gameObject); } catch (Exception) { }
+                s_Traps.Remove(gone[i]);
+            }
+            if (gone.Count > 0 && s_TrapLogged < 8) { s_TrapLogged++; Logger.LogInfo("traps: " + gone.Count + " left behind, removed"); }
         }
 
         private void RemoveTraps(AIs.HumanAIGroup g)
@@ -251,7 +279,7 @@ namespace GHSmartNatives
                 if (s_Self == null) return;
                 try
                 {
-                    s_Self.RemoveTraps(__instance); s_Attack.Remove(__instance); s_Seen.Remove(__instance);
+                    s_Attack.Remove(__instance); s_Seen.Remove(__instance);      // the traps stay - see TrapSweep
                     s_LastScoutWave.Remove(__instance);
                     List<AIs.HumanAI> ex = new List<AIs.HumanAI>();
                     foreach (AIs.HumanAI k in s_Scouts.Keys) if (k == null || k.m_Group == __instance) ex.Add(k);

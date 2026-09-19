@@ -28,9 +28,12 @@
 // player, finding him. Don't make them stop and sit down; they go and attack him instantly." So:
 //   - a calm native is ALWAYS walking: the moment it reaches its spot it is given the next one
 //     (a timer is only the unstick, for a spot the path never reaches)
-//   - with the player inside SearchRadius the next spot is a step TOWARD the player, with a little
-//     sideways jitter so a camp fans out instead of walking in a file
-//   - otherwise the next spot is a random one around the camp, inside RoamRadius of home
+//   - HONEST SEARCH (his pick from the list): the next spot is a step toward where they LAST SAW
+//     OR HEARD you - a member's SightModule.m_VisibleBeings holding you, a HearingModule.m_Noise,
+//     the notice, a trap, a neighbour's call - never toward where you actually are. Reaching that
+//     spot without a fresh sighting starts a sweep: random points in a circle that widens by a few
+//     metres per step up to SearchRadius, until ForgetSeconds pass without a sighting
+//   - with nothing to go on, the next spot is a random one around the camp, inside RoamRadius
 //   - the instant any member is within NoticeRadius the hunt patch above fires - no sitting first
 // The camp's original spot is remembered per native and put back when roam is turned off.
 //
@@ -60,6 +63,7 @@ namespace GHSmartNatives
         private ConfigEntry<float> _roamEveryMax;
         private ConfigEntry<float> _searchRadius;
         private ConfigEntry<float> _stepMetres;
+        private ConfigEntry<float> _forgetSecs;
 
         private void BindHuntConfig()
         {
@@ -89,9 +93,12 @@ namespace GHSmartNatives
             _roamRadius = Config.Bind("Roam", "RadiusMetres", 12f,
                 new ConfigDescription("With nobody to look for, how far from its own spot a native wanders.",
                     new AcceptableValueRange<float>(3f, 40f)));
-            _searchRadius = Config.Bind("Roam", "SearchRadiusMetres", 150f,
-                new ConfigDescription("With you inside this distance of a calm native, its next spot is a " +
-                    "step toward you.", new AcceptableValueRange<float>(20f, 500f)));
+            _searchRadius = Config.Bind("Roam", "SearchRadiusMetres", 60f,
+                new ConfigDescription("How wide the sweep around the spot they last saw or heard you " +
+                    "grows.", new AcceptableValueRange<float>(10f, 300f)));
+            _forgetSecs = Config.Bind("Roam", "ForgetSeconds", 120f,
+                new ConfigDescription("With no fresh sighting or sound for this long, they give the " +
+                    "search up and wander the camp again.", new AcceptableValueRange<float>(10f, 600f)));
             _stepMetres = Config.Bind("Roam", "StepMetres", 12f,
                 new ConfigDescription("How long each searching step is.", new AcceptableValueRange<float>(4f, 40f)));
             _roamEveryMin = Config.Bind("Roam", "UnstickSecondsMin", 8f,
@@ -140,6 +147,7 @@ namespace GHSmartNatives
 
                     __result = true;
                     s_NoticedAt[__instance] = Time.time;
+                    RememberSeen(__instance, p.transform.position);
                     s_Self.Say("Natives noticed you - " + armed + " coming from " + Mathf.RoundToInt(d) + " m");
                     s_Self.Logger.LogInfo("hunt: group '" + __instance.name + "' (" + armed + ") noticed you at "
                         + d.ToString("F0") + " m - attack state");
@@ -274,6 +282,44 @@ namespace GHSmartNatives
         // Roam
         // -----------------------------------------------------------------------------------------
 
+        // What a group knows about where you are: only what a member saw or heard, or was told.
+        private class SeenMemo { public Vector3 Where; public float At; public float Sweep; }
+        private static readonly Dictionary<AIs.HumanAIGroup, SeenMemo> s_Seen = new Dictionary<AIs.HumanAIGroup, SeenMemo>();
+
+        internal static void RememberSeen(AIs.HumanAIGroup g, Vector3 where)
+        {
+            if (g == null) return;
+            SeenMemo m;
+            if (!s_Seen.TryGetValue(g, out m)) { m = new SeenMemo(); s_Seen[g] = m; }
+            m.Where = where; m.At = Time.time; m.Sweep = 0f;
+        }
+
+        /// <summary>Read the members' own senses: a sighting or a noise this frame updates the memo.</summary>
+        private static void ReadSenses(AIs.HumanAIGroup g, Being target)
+        {
+            if (g.m_Members == null) return;
+            for (int i = 0; i < g.m_Members.Count; i++)
+            {
+                AIs.HumanAI m = g.m_Members[i];
+                if (m == null) continue;
+                if (target != null && m.m_SightModule != null && m.m_SightModule.m_VisibleBeings != null
+                    && m.m_SightModule.m_VisibleBeings.Contains(target))
+                {
+                    RememberSeen(g, target.transform.position);
+                    return;
+                }
+                if (m.m_HearingModule != null && m.m_HearingModule.m_Noise != null
+                    && Time.time - m.m_HearingModule.m_Noise.m_Time < 3f)
+                {
+                    SeenMemo memo;
+                    // A noise never overrides a sighting made in the last few seconds.
+                    if (s_Seen.TryGetValue(g, out memo) && Time.time - memo.At < 3f) continue;
+                    RememberSeen(g, m.m_HearingModule.m_Noise.m_Position);
+                    return;
+                }
+            }
+        }
+
         private class RoamState { public Vector3 Home; public Vector3 Forward; public float NextAt; public int Walks; }
         private readonly Dictionary<AIs.HumanAI, RoamState> _roam = new Dictionary<AIs.HumanAI, RoamState>();
         private float _roamSweepAt;
@@ -287,6 +333,9 @@ namespace GHSmartNatives
 
             float now = Time.time;
             Being p = HuntTarget();
+            ReadSenses(g, p);
+            SeenMemo seen;
+            bool hasLead = s_Seen.TryGetValue(g, out seen) && (now - seen.At) < _forgetSecs.Value;
             for (int i = 0; i < g.m_Members.Count; i++)
             {
                 AIs.HumanAI m = g.m_Members[i];
@@ -309,16 +358,28 @@ namespace GHSmartNatives
                 st.NextAt = now + UnityEngine.Random.Range(_roamEveryMin.Value, Mathf.Max(_roamEveryMin.Value, _roamEveryMax.Value));
 
                 Vector3 want;
-                bool searching = false;
-                float dp = (p != null) ? Vector3.Distance(here, p.transform.position) : float.MaxValue;
-                if (p != null && dp <= _searchRadius.Value)
+                string doing = null;
+                if (hasLead)
                 {
-                    // A step toward the player, turned a little to one side so the camp fans out.
-                    Vector3 dir = p.transform.position - here; dir.y = 0f;
-                    if (dir.sqrMagnitude < 0.01f) dir = Vector3.forward; else dir.Normalize();
-                    dir = Quaternion.Euler(0f, UnityEngine.Random.Range(-35f, 35f), 0f) * dir;
-                    want = here + dir * Mathf.Min(_stepMetres.Value, dp);
-                    searching = true;
+                    float dl = Vector3.Distance(here, seen.Where);
+                    if (dl > 6f)
+                    {
+                        // A step toward the last place they saw or heard you, turned a little to one
+                        // side so the camp fans out instead of walking in a file.
+                        Vector3 dir = seen.Where - here; dir.y = 0f;
+                        if (dir.sqrMagnitude < 0.01f) dir = Vector3.forward; else dir.Normalize();
+                        dir = Quaternion.Euler(0f, UnityEngine.Random.Range(-35f, 35f), 0f) * dir;
+                        want = here + dir * Mathf.Min(_stepMetres.Value, dl);
+                        doing = "heads for where it last saw or heard you (" + Mathf.RoundToInt(dl) + " m)";
+                    }
+                    else
+                    {
+                        // There, and you are not: sweep a widening circle around the spot.
+                        seen.Sweep = Mathf.Min(seen.Sweep + 4f, _searchRadius.Value);
+                        Vector2 r = UnityEngine.Random.insideUnitCircle.normalized * UnityEngine.Random.Range(4f, seen.Sweep);
+                        want = seen.Where + new Vector3(r.x, 0f, r.y);
+                        doing = "sweeps " + Mathf.RoundToInt(seen.Sweep) + " m around where it lost you";
+                    }
                 }
                 else
                 {
@@ -342,7 +403,7 @@ namespace GHSmartNatives
                 if (s_RoamLogged < 6)
                 {
                     s_RoamLogged++;
-                    Logger.LogInfo("roam: '" + m.name + "' " + (searching ? "searches - a step toward you (" + Mathf.RoundToInt(dp) + " m away)" : "wanders " + Vector3.Distance(hit.position, st.Home).ToString("F0") + " m from home")
+                    Logger.LogInfo("roam: '" + m.name + "' " + (doing != null ? doing : "wanders " + Vector3.Distance(hit.position, st.Home).ToString("F0") + " m from home")
                         + (s_RoamLogged == 6 ? " - further roam lines suppressed" : ""));
                 }
             }
@@ -391,6 +452,8 @@ namespace GHSmartNatives
                     if (!Ours(__instance)) return;
                     s_Self.ApplySensesTo(__instance);
                     s_Self.RoamTick(__instance);
+                    s_Self.TacticsTick(__instance);
+                    if (__instance.m_State == AIs.HumanAIGroup.State.Attack) ReadSenses(__instance, HuntTarget());
                 }
                 catch (Exception ex) { s_Self.HuntLog("group tick failed: " + ex.Message); }
             }

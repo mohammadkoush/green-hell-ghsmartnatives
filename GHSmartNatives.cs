@@ -46,7 +46,7 @@ namespace GHSmartNatives
     {
         public const string Guid    = "com.mohammadkoush.ghsmartnatives";
         public const string Name    = "GHSmartNatives";
-        public const string Version = "1.0.1";
+        public const string Version = "1.1.0";
 
         private static GHSmartNativesPlugin s_Self;
         private Harmony _harmony;
@@ -75,6 +75,8 @@ namespace GHSmartNatives
 
             BindHuntConfig();
             BindRoamConfig();
+            BindTacticsConfig();
+            BindAlarmConfig();
             BindNumbersConfig();
 
             try
@@ -97,7 +99,7 @@ namespace GHSmartNatives
 
         private void OnDestroy()
         {
-            try { RestoreSenses(); RestoreRoam(); } catch (Exception) { }
+            try { RestoreSenses(); RestoreRoam(); RemoveTraps(null); } catch (Exception) { }
             try { if (_harmony != null) _harmony.UnpatchSelf(); } catch (Exception) { }
         }
 
@@ -262,15 +264,48 @@ namespace GHSmartNatives
             GUILayout.Space(8f);
             GUILayout.Label("Roam", _head);
             bool roam = _roamEnabled.Value;
-            if (Row("Camp natives never sit - they walk, and look for you", roam) != roam) _roamEnabled.Value = !roam;
+            if (Row("Camp natives never sit - they walk, and search where they last saw or heard you", roam) != roam) _roamEnabled.Value = !roam;
             if (_roamEnabled.Value)
             {
-                _searchRadius.Value = Slider("They search for you within", _searchRadius.Value, 20f, 500f, " m", 0);
+                _searchRadius.Value = Slider("The sweep around where they lost you grows to", _searchRadius.Value, 10f, 300f, " m", 0);
+                _forgetSecs.Value   = Slider("They give the search up after", _forgetSecs.Value, 10f, 600f, " s", 0);
                 _stepMetres.Value   = Slider("Each searching step", _stepMetres.Value, 4f, 40f, " m", 0);
                 _roamRadius.Value   = Slider("With nobody to look for, wander this far from camp", _roamRadius.Value, 3f, 40f, " m", 0);
                 _roamEveryMin.Value = Slider("A spot never reached is replaced after", _roamEveryMin.Value, 3f, 120f, " s", 0);
                 _roamEveryMax.Value = Slider("...and no later than", _roamEveryMax.Value, 5f, 240f, " s", 0);
                 if (_roamEveryMax.Value < _roamEveryMin.Value) _roamEveryMax.Value = _roamEveryMin.Value;
+            }
+
+            GUILayout.Space(8f);
+            GUILayout.Label("Tactics", _head);
+            bool tac = _tacticsEnabled.Value;
+            if (Row("Archers keep their distance; the boss waits for the surround", tac) != tac) _tacticsEnabled.Value = !tac;
+            if (_tacticsEnabled.Value)
+            {
+                _archerKeep.Value = Slider("Archers stay back at", _archerKeep.Value, 4f, 25f, " m", 0);
+                bool bh = _bossHolds.Value;
+                if (Row("The boss waits until you are surrounded", bh) != bh) _bossHolds.Value = !bh;
+                if (_bossHolds.Value)
+                {
+                    _bossKeep.Value = Slider("The boss waits at", _bossKeep.Value, 5f, 30f, " m", 0);
+                    _surroundedCount.Value = Mathf.RoundToInt(Slider("Surrounded means this many within 6 m", _surroundedCount.Value, 1f, 5f, "", 0));
+                    _bossWaitMax.Value = Slider("The boss comes in anyway after", _bossWaitMax.Value, 5f, 180f, " s", 0);
+                }
+            }
+
+            GUILayout.Space(8f);
+            GUILayout.Label("Alarm", _head);
+            bool call = _callEnabled.Value;
+            if (Row("Camps call each other", call) != call) _callEnabled.Value = !call;
+            if (_callEnabled.Value) _callRadius.Value = Slider("A call to arms carries", _callRadius.Value, 20f, 400f, " m", 0);
+            bool traps = _trapsEnabled.Value;
+            if (Row("A ring of bow traps around a camp - stepping on one is a call to arms", traps) != traps) _trapsEnabled.Value = !traps;
+            if (_trapsEnabled.Value)
+            {
+                _trapsPerCamp.Value = Mathf.RoundToInt(Slider("Traps per camp (applies when a camp next wakes)", _trapsPerCamp.Value, 1f, 8f, "", 0));
+                _trapRing.Value = Slider("The ring sits at", _trapRing.Value, 6f, 40f, " m", 0);
+                bool arr = _trapsArmed.Value;
+                if (Row("The traps carry arrows and shoot", arr) != arr) _trapsArmed.Value = !arr;
             }
 
             GUILayout.Space(8f);

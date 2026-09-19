@@ -64,6 +64,10 @@ panel too.
 | `Alarm.CampsCallEachOther` / `CallRadiusMetres` | on / 120 | a call to arms carries this far |
 | `Alarm.TrapsAroundCamp` / `TrapsPerCamp` / `TrapRingMetres` | on / 3 / 18 | the ring of bow traps |
 | `Alarm.TrapsHaveArrows` | on | off: the traps only ring the alarm |
+| `Alarm.MaxTraps` | 6 | never more in the world; the farthest from you go first to make room |
+| `Alarm.TrapLifeMinutes` | 20 | a trap vanishes on its own after this |
+| `Alarm.TrapTripMetres` | 1.2 | standing this close fires the trap through the game's own trigger |
+| `Alarm.TrapsVanishBeyondMetres` | 150 | a trap this far behind you is removed |
 | `Roam.RadiusMetres` | 12 | with nobody to look for, how far from its spot a native wanders |
 | `Roam.UnstickSecondsMin / Max` | 8 / 20 | a spot never reached is replaced after this long |
 | `Numbers.MembersMin / Max` | 2 / 5 | the random count for groups, patrols and waves |

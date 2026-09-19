@@ -39,6 +39,8 @@ namespace GHSmartNatives
         private ConfigEntry<bool>  _trapsArmed;
         private ConfigEntry<float> _trapsForget;
         private ConfigEntry<float> _trapTrip;
+        private ConfigEntry<int>   _trapsMax;
+        private ConfigEntry<float> _trapLife;
 
         private void BindAlarmConfig()
         {
@@ -63,6 +65,17 @@ namespace GHSmartNatives
             _trapTrip = Config.Bind("Alarm", "TrapTripMetres", 1.2f,
                 new ConfigDescription("Standing this close to a native trap trips it, whether or not the " +
                     "game's own trigger fires.", new AcceptableValueRange<float>(0.5f, 4f)));
+            // HIS RULES, 2026-09-19: "There should be a maximum of six traps at all times. If the game
+            // wants to spawn three new ones, three old ones should disappear - the three furthest
+            // away from the player. A trap not visited by the player is a trap set away from the
+            // player: a bad placement." And: "a timeout for the trap to disappear on its own -
+            // traps around camp will never disappear otherwise, and that makes traps everywhere."
+            _trapsMax = Config.Bind("Alarm", "MaxTraps", 6,
+                new ConfigDescription("Never more native traps than this in the world at once. Room for " +
+                    "new ones is made by removing the ones farthest from you.", new AcceptableValueRange<int>(1, 30)));
+            _trapLife = Config.Bind("Alarm", "TrapLifeMinutes", 20f,
+                new ConfigDescription("A native trap vanishes on its own after this long, wherever it is.",
+                    new AcceptableValueRange<float>(1f, 240f)));
             _trapsArmed = Config.Bind("Alarm", "TrapsHaveArrows", true,
                 "The traps carry a tribe arrow and shoot, like the game's own. Off: they only ring " +
                 "the alarm.");
@@ -143,6 +156,34 @@ namespace GHSmartNatives
         // -----------------------------------------------------------------------------------------
 
         private static readonly Dictionary<BowTrap, AIs.HumanAIGroup> s_Traps = new Dictionary<BowTrap, AIs.HumanAIGroup>();
+        private static readonly Dictionary<BowTrap, float> s_TrapSetAt = new Dictionary<BowTrap, float>();
+
+        /// <summary>Room for n more: the farthest from him go first, because a trap he never met was set in the wrong place.</summary>
+        private void MakeRoomFor(int n)
+        {
+            Player p = Player.Get();
+            if (p == null) return;
+            int max = Mathf.Max(1, _trapsMax.Value);
+            while (s_Traps.Count > 0 && s_Traps.Count + n > max)
+            {
+                BowTrap far = null; float farD = -1f;
+                foreach (KeyValuePair<BowTrap, AIs.HumanAIGroup> kv in s_Traps)
+                {
+                    if (kv.Key == null) { far = kv.Key; break; }
+                    float d = Vector3.Distance(kv.Key.transform.position, p.transform.position);
+                    if (d > farD) { farD = d; far = kv.Key; }
+                }
+                if (far == null && farD < 0f) break;
+                DropTrap(far, "room for new ones - it was " + Mathf.RoundToInt(farD) + " m from you, the farthest");
+            }
+        }
+
+        private void DropTrap(BowTrap t, string why)
+        {
+            try { if (t != null) UnityEngine.Object.Destroy(t.gameObject); } catch (Exception) { }
+            s_Traps.Remove(t); s_TrapSetAt.Remove(t); s_TrippedAt.Remove(t);
+            if (s_TrapLogged < 12) { s_TrapLogged++; Logger.LogInfo("traps: one removed - " + why); }
+        }
         private static int s_TrapLogged;
 
         [HarmonyPatch(typeof(AIs.HumanAIGroup), "Activate")]
@@ -173,6 +214,7 @@ namespace GHSmartNatives
             }
 
             int placed = 0, want = _trapsPerCamp.Value;
+            MakeRoomFor(want);
             float start = UnityEngine.Random.Range(0f, 360f);
             for (int i = 0; i < want; i++)
             {
@@ -193,6 +235,7 @@ namespace GHSmartNatives
                     continue;
                 }
                 s_Traps[bt] = g;
+                s_TrapSetAt[bt] = Time.time;
                 placed++;
                 if (_trapsArmed.Value) ArmTrap(bt, im, hit.position);
             }
@@ -231,7 +274,11 @@ namespace GHSmartNatives
                 {
                     AIs.HumanAIGroup g;
                     if (!s_Traps.TryGetValue(__instance, out g)) return;
-                    if (obj == null || !GameObjectExtension.IsPlayer(obj)) return;
+                    if (obj == null || (!GameObjectExtension.IsPlayer(obj) && obj.GetComponent<Player>() == null)) return;
+                    s_TripHandled = true;
+                    float last;
+                    if (s_TrippedAt.TryGetValue(__instance, out last) && Time.time - last < 20f && Time.time - last > 0.5f) return;
+                    s_TrippedAt[__instance] = Time.time;
                     s_Self.Say("You tripped a native trap - the camp is alarmed");
                     if (g != null && g.m_Active) s_Self.Alarm(g, obj.transform.position, "trap tripped", true);
                     else s_Self.CallNeighbours(g, obj.transform.position);       // the camp is gone; its neighbours are not
@@ -247,6 +294,7 @@ namespace GHSmartNatives
         // still the game's to shoot through its own trigger.
         private float _trapTripAt;
         private static readonly Dictionary<BowTrap, float> s_TrippedAt = new Dictionary<BowTrap, float>();
+        private static bool s_TripHandled;
 
         private void TrapTripByDistance()
         {
@@ -262,10 +310,22 @@ namespace GHSmartNatives
                 if (s_TrippedAt.TryGetValue(t, out last) && Time.time - last < 20f) continue;
                 if (Vector3.Distance(t.transform.position, p.transform.position) > _trapTrip.Value) continue;
                 s_TrippedAt[t] = Time.time;
-                Say("You tripped a native trap - the camp is alarmed");
-                AIs.HumanAIGroup g = kv.Value;
-                if (g != null && g.m_Active) Alarm(g, p.transform.position, "trap tripped (by distance)", true);
-                else CallNeighbours(g, p.transform.position);
+                // HIS RULE: "do the trigger trap - work your way around it to find a way to it being
+                // triggered." So the game's own entry is called with the player, exactly what its
+                // TrapTrigger would pass: BowTrap.OnEnterTrigger -> Shot -> the animator, the arrow
+                // slot, the sound, the hit. The alarm prefix below sees that call like any other.
+                bool fired = false;
+                try { t.OnEnterTrigger(p.gameObject); fired = true; }
+                catch (Exception ex) { HuntLog("trap fire failed: " + ex.Message); }
+                if (!s_TripHandled)
+                {
+                    // The prefix did not take it (IsPlayer said no to the Player object): ring it here.
+                    Say("You tripped a native trap - the camp is alarmed");
+                    AIs.HumanAIGroup g = kv.Value;
+                    if (g != null && g.m_Active) Alarm(g, p.transform.position, "trap tripped (by distance" + (fired ? ", fired" : "") + ")", true);
+                    else CallNeighbours(g, p.transform.position);
+                }
+                s_TripHandled = false;
                 return;
             }
         }
@@ -296,18 +356,17 @@ namespace GHSmartNatives
             _trapSweepAt = Time.time;
             Player p = Player.Get();
             if (p == null) return;
-            List<BowTrap> gone = new List<BowTrap>();
+            List<BowTrap> gone = new List<BowTrap>(); List<string> why = new List<string>();
             foreach (KeyValuePair<BowTrap, AIs.HumanAIGroup> kv in s_Traps)
             {
-                if (kv.Key == null) { gone.Add(kv.Key); continue; }
-                if (Vector3.Distance(kv.Key.transform.position, p.transform.position) > _trapsForget.Value) gone.Add(kv.Key);
+                if (kv.Key == null) { gone.Add(kv.Key); why.Add("gone from the world"); continue; }
+                float setAt;
+                if (s_TrapSetAt.TryGetValue(kv.Key, out setAt) && Time.time - setAt > _trapLife.Value * 60f)
+                { gone.Add(kv.Key); why.Add("its " + Mathf.RoundToInt(_trapLife.Value) + " minutes are up"); continue; }
+                if (Vector3.Distance(kv.Key.transform.position, p.transform.position) > _trapsForget.Value)
+                { gone.Add(kv.Key); why.Add("left " + Mathf.RoundToInt(_trapsForget.Value) + " m behind"); }
             }
-            for (int i = 0; i < gone.Count; i++)
-            {
-                try { if (gone[i] != null) UnityEngine.Object.Destroy(gone[i].gameObject); } catch (Exception) { }
-                s_Traps.Remove(gone[i]);
-            }
-            if (gone.Count > 0 && s_TrapLogged < 8) { s_TrapLogged++; Logger.LogInfo("traps: " + gone.Count + " left behind, removed"); }
+            for (int i = 0; i < gone.Count; i++) DropTrap(gone[i], why[i]);
         }
 
         // THEIRS, NOT HIS. His words: "the trap should not be removed by the player or interacted

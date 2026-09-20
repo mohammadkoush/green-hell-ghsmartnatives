@@ -17,16 +17,17 @@ each on its own switch, all through the game's own AI:
   around the camp with long, persistent steps, looking for you. A scout does not count for the
   camp's notice radius: it has to see you, or walk into you. When it does, it turns for home at a
   run, the camp remembers where you were, and a wave is spawned at your position (once per
-  cooldown). A scout hangs back in any fight.
+  cooldown); the scout's own sighting never raises its camp. A scout hangs back in any fight,
+  resets sprung traps it passes, and its death brings a wave to where it fell.
 - **Tactics.** Archers (hunters) hold their distance and throw while the others close in; the Thug
   waits at a distance until you are surrounded, a member is lost, or a timer runs out — then comes.
 - **Stealth.** Crouched steps are heard from two metres less; standing still while crouched halves
   how far natives see you; your own footsteps sound as loud as the noise they make.
-- **Alarm.** A camp that starts hunting calls every calm camp within range into it. Each camp wakes
-  with a ring of the tribes' own spike traps around it (bow traps by choice); stepping on one hurts,
-  and sends a scout to look. A native trap cannot be taken, disarmed or hacked down - only avoided.
-  Traps are never written into the save; any left in a save by an older version are taken in on
-  load and fall under the same cap and sweep.
+- **Alarm.** A camp that starts hunting calls every calm camp within range into it. Scouts set the
+  tribes' own spike traps where they walk (bow traps by choice), one at a time up to a cap, never
+  near anything you built; stepping on one hurts and brings a scout to reset it. A native trap
+  cannot be taken, disarmed or hacked down - only avoided. Traps are never written into the save;
+  any left in a save by an older version are taken in on load and fall under the same cap and sweep.
 - **Numbers.** Camp groups, patrols and waves spawn a random number between a floor and a ceiling
   (default 2 to 5) instead of the game's slow ramp. A wave of 4 or more always brings one Thug.
 
@@ -65,11 +66,13 @@ panel too.
 | `Scouts.ScoutsPerCamp` / `ScoutRadiusMetres` | 1 / 80 | how many go out, how far they range |
 | `Scouts.ScoutCallsWave` / `WaveCooldownSeconds` | on / 180 | the wave a sighting brings |
 | `Scouts.ScoutAlarmsCamp` | off | a sighting also brings the camp and its neighbours |
+| `Scouts.DeathCallsWave` | on | killing a scout brings a wave to the spot |
 | `Tactics.ArcherKeepMetres` | 10 | hunters back off below this and never walk in past it |
 | `Tactics.BossWaitsForSurround` / `BossKeepMetres` | on / 14 | the Thug waits here |
 | `Tactics.SurroundedCount` / `BossWaitMaxSeconds` | 2 / 45 | what releases the Thug |
 | `Alarm.CampsCallEachOther` / `CallRadiusMetres` | on / 120 | a call to arms carries this far |
-| `Alarm.TrapsAroundCamp` / `TrapsPerCamp` / `TrapRingMetres` | on / 3 / 18 | the ring of bow traps |
+| `Alarm.ScoutsSetTraps` / `ScoutSetsTrapEverySeconds` | on / 60 | scouts set the traps, one per scout per minute at most |
+| `Alarm.PlayerCampClearMetres` / `TrapSpacingMetres` | 15 / 10 | no trap near anything you built, none near another trap |
 | `Alarm.TrapKind` | Spikes | the tribes' spike trap (no arrow) or their bow trap |
 | `Alarm.SpikesHiddenUnderLeaves` | off | the game hides its spikes; here they show, so they can be avoided |
 | `Alarm.TrapsHaveArrows` | on | the traps are armed (bow traps shoot); off: alarm only |

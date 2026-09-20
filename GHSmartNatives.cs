@@ -46,7 +46,7 @@ namespace GHSmartNatives
     {
         public const string Guid    = "com.mohammadkoush.ghsmartnatives";
         public const string Name    = "GHSmartNatives";
-        public const string Version = "1.7.4";
+        public const string Version = "1.8.0";
 
         private static GHSmartNativesPlugin s_Self;
         private Harmony _harmony;
@@ -328,6 +328,8 @@ namespace GHSmartNatives
                 if (_scoutWave.Value) _scoutWaveCooldown.Value = Slider("Not another wave from that camp within", _scoutWaveCooldown.Value, 30f, 900f, " s", 0);
                 bool sa = _scoutAlarmsCamp.Value;
                 if (Row("...and brings its own camp too", sa) != sa) _scoutAlarmsCamp.Value = !sa;
+                bool sd = _scoutDeathWave.Value;
+                if (Row("Killing a scout brings a wave to the spot", sd) != sd) _scoutDeathWave.Value = !sd;
             }
 
             }
@@ -361,16 +363,17 @@ namespace GHSmartNatives
             bool ts = _tripScout.Value;
             if (Row("A tripped trap sends a scout to look, not the whole camp", ts) != ts) _tripScout.Value = !ts;
             bool traps = _trapsEnabled.Value;
-            if (Row("A ring of bow traps around a camp - stepping on one is a call to arms", traps) != traps) _trapsEnabled.Value = !traps;
+            if (Row("Scouts set traps where they walk - stepping on one brings a scout", traps) != traps) _trapsEnabled.Value = !traps;
             if (_trapsEnabled.Value)
             {
-                _trapsPerCamp.Value = Mathf.RoundToInt(Slider("Traps per camp (applies when a camp next wakes)", _trapsPerCamp.Value, 1f, 8f, "", 0));
                 _trapsMax.Value = Mathf.RoundToInt(Slider("Never more traps in the world than   (now " + s_Traps.Count + ")", _trapsMax.Value, 1f, 30f, "", 0));
+                _trapEvery.Value = Slider("A scout sets at most one trap every", _trapEvery.Value, 10f, 600f, " s", 0);
+                _trapClear.Value = Slider("No trap within this of anything you built", _trapClear.Value, 0f, 60f, " m", 0);
+                _trapGap.Value = Slider("No two traps closer than", _trapGap.Value, 2f, 40f, " m", 0);
                 _trapLife.Value = Slider("A trap vanishes on its own after", _trapLife.Value, 1f, 240f, " min", 0);
                 _trapTrip.Value = Slider("Standing this close fires it", _trapTrip.Value, 0.5f, 4f, " m", 1);
                 _trapRearm.Value = Slider("A new trap that missed its arming is tried again every", _trapRearm.Value, 2f, 120f, " s", 0);
                 _trapsForget.Value = Slider("A trap this far behind you is removed", _trapsForget.Value, 30f, 500f, " m", 0);
-                _trapRing.Value = Slider("The ring sits at", _trapRing.Value, 6f, 40f, " m", 0);
                 bool sk = _trapKind.Value != "Bow";
                 if (Row("Spike traps (no arrow); off = bow traps", sk) != sk) _trapKind.Value = sk ? "Bow" : "Spikes";
                 bool sh = _spikesHidden.Value;

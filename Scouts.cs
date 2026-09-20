@@ -20,6 +20,7 @@
 using System;
 using System.Collections.Generic;
 using BepInEx.Configuration;
+using HarmonyLib;
 using UnityEngine;
 using UnityEngine.AI;
 
@@ -36,6 +37,7 @@ namespace GHSmartNatives
         private ConfigEntry<float> _scoutWaveCooldown;
         private ConfigEntry<bool>  _scoutAlarmsCamp;
         private ConfigEntry<float> _scoutRetreat;
+        private ConfigEntry<bool>  _scoutDeathWave;
 
         private void BindScoutConfig()
         {
@@ -60,6 +62,8 @@ namespace GHSmartNatives
             _scoutAlarmsCamp = Config.Bind("Scouts", "ScoutAlarmsCamp", false,
                 "A scout that finds you also brings its own camp (and its neighbours) into the hunt, " +
                 "not just a wave.");
+            _scoutDeathWave = Config.Bind("Scouts", "DeathCallsWave", true,
+                "Killing a scout brings a wave to where it fell (his rule, 2026-09-20).");
             _scoutRetreat = Config.Bind("Scouts", "RetreatSeconds", 25f,
                 new ConfigDescription("How long a scout runs for home before it goes scouting again.",
                     new AcceptableValueRange<float>(5f, 120f)));
@@ -71,6 +75,8 @@ namespace GHSmartNatives
             public Item Errand;             // a trap to walk to and reset - his rule, see TripSendsScout
             public Vector3 ErrandAt; public float ErrandSince;
             public bool ErrandRun;          // a neighbour's scout runs, to make up the distance
+            public bool Placing;            // the errand is a spot to set a new trap at, not a trap to reset
+            public float NextTrapAt;        // not another trap from this scout before this
         }
 
         // A TRIPPED TRAP SENDS A SCOUT, NOT A WAVE. His words: "When triggering a trap the game should
@@ -96,7 +102,27 @@ namespace GHSmartNatives
                 camp = NearestCalmCamp(at, g);
                 neighbour = camp != null;
             }
-            if (camp == null) return false;
+            if (camp == null)
+            {
+                // "There needs to be a scout as soon as a trap is sprung." Every active camp is
+                // within the game's wake distance of him, so a camp that cannot send one is either
+                // fighting him already or dead. Logged once a minute, so the log says which.
+                if (Time.time - s_NoScoutSaidAt > 60f)
+                {
+                    s_NoScoutSaidAt = Time.time;
+                    int fighting = 0, alive = 0;
+                    if (AIs.HumanAIGroup.s_AIGroups != null)
+                        for (int i = 0; i < AIs.HumanAIGroup.s_AIGroups.Count; i++)
+                        {
+                            AIs.HumanAIGroup o = AIs.HumanAIGroup.s_AIGroups[i];
+                            if (o == null || !o.m_Active || !Ours(o) || o.IsWave() || o.IsPatrol() || o.m_Members == null || o.m_Members.Count == 0) continue;
+                            alive++;
+                            if (o.m_State != AIs.HumanAIGroup.State.Calm) fighting++;
+                        }
+                    Logger.LogInfo("scouts: trap tripped but no calm camp to send a scout - " + alive + " camp(s) awake with members, " + fighting + " of them fighting or upset");
+                }
+                return false;
+            }
 
             AssignScouts(camp);
             AIs.HumanAI scout = null;
@@ -110,7 +136,7 @@ namespace GHSmartNatives
             if (scout == null) return false;
             ScoutState sc = s_Scouts[scout];
             if (sc.Errand != null && Time.time - sc.ErrandSince < 120f) return true;    // already on its way
-            sc.Errand = trap; sc.ErrandAt = at; sc.ErrandSince = Time.time; sc.ErrandRun = neighbour;
+            sc.Errand = trap; sc.ErrandAt = at; sc.ErrandSince = Time.time; sc.ErrandRun = neighbour; sc.Placing = false;
             sc.RetreatUntil = 0f;
             scout.m_StartPosition = at;
             Vector3 d = at - scout.transform.position; d.y = 0f;
@@ -150,6 +176,7 @@ namespace GHSmartNatives
             }
             catch (Exception ex) { HuntLog("trap reset failed: " + ex.Message); }
         }
+        private static float s_NoScoutSaidAt = -100f;
         private static readonly Dictionary<AIs.HumanAI, ScoutState> s_Scouts = new Dictionary<AIs.HumanAI, ScoutState>();
         private static readonly Dictionary<AIs.HumanAIGroup, float> s_LastScoutWave = new Dictionary<AIs.HumanAIGroup, float>();
         private static int s_ScoutLogged;
@@ -202,32 +229,33 @@ namespace GHSmartNatives
                 if (sc.Errand == null || now - sc.ErrandSince > 180f) sc.Errand = null;
                 else if (Vector3.Distance(here, sc.ErrandAt) < 2.5f) { FinishErrand(m, sc); return true; }
             }
-
-            // Found you? Its own eyes, or it walked into you.
-            if (target != null)
+            if (sc.Placing)
             {
-                bool sees = m.m_SightModule != null && m.m_SightModule.m_VisibleBeings != null && m.m_SightModule.m_VisibleBeings.Contains(target);
-                float dt = Vector3.Distance(here, target.transform.position);
-                if (sees || dt < 6f)
+                if (now - sc.ErrandSince > 180f) { sc.Placing = false; sc.NextTrapAt = now + 30f; }
+                else if (Vector3.Distance(here, sc.ErrandAt) < 2.5f)
                 {
-                    sc.FoundAt = now;
-                    sc.Errand = null;
-                    sc.RetreatUntil = now + _scoutRetreat.Value;
-                    m.m_StartPosition = st.Home;
-                    m.m_StartForward = (st.Home - here).normalized;
-                    m.m_MoveStyle = Enums.AIMoveStyle.Run;
-                    RememberSeen(g, target.transform.position);
-                    Say("A scout spotted you at " + Mathf.RoundToInt(dt) + " m - it backs off");
-                    Logger.LogInfo("scouts: '" + m.name + "' found you at " + dt.ToString("F0") + " m (" + (sees ? "saw you" : "walked into you") + ") - running home");
-                    if (_scoutAlarmsCamp.Value) Alarm(g, target.transform.position, "scout's report", true);
-                    if (_scoutWave.Value) ScoutWave(g);
+                    sc.Placing = false;
+                    sc.NextTrapAt = now + _trapEvery.Value;
+                    PlaceTrapAt(g, sc.ErrandAt, m);
                     return true;
                 }
             }
 
-            if (sc.Errand != null)
+            // Found you? Its own eyes (handled first, below, before the group can attack on them)
+            // or it walked into you.
+            if (target != null)
             {
-                // Keep the trap as the destination; the rest goal re-paths on its own. A neighbour's
+                bool sees = m.m_SightModule != null && m.m_SightModule.m_VisibleBeings != null && m.m_SightModule.m_VisibleBeings.Contains(target);
+                float dt = Vector3.Distance(here, target.transform.position);
+                if (sees || dt < 6f) { ScoutFound(g, m, sc, st.Home, target, dt, sees); return true; }
+            }
+
+            // Passing a sprung trap: reset it. "A wandering scout checks on traps."
+            ResetTrapsNear(m);
+
+            if (sc.Errand != null || sc.Placing)
+            {
+                // Keep the spot as the destination; the rest goal re-paths on its own. A neighbour's
                 // scout keeps running (set, not chased: only when the game put it back to a walk).
                 if (Vector3.Distance(m.m_StartPosition, sc.ErrandAt) > 1f) m.m_StartPosition = sc.ErrandAt;
                 if (sc.ErrandRun && m.m_MoveStyle != Enums.AIMoveStyle.Run) m.m_MoveStyle = Enums.AIMoveStyle.Run;
@@ -259,7 +287,109 @@ namespace GHSmartNatives
             Vector3 fwd = hit.position - here; fwd.y = 0f;
             if (fwd.sqrMagnitude > 0.01f) m.m_StartForward = fwd.normalized;
             m.m_MoveStyle = Enums.AIMoveStyle.Walk;
+
+            // A trap due, and the world short of them: this step's spot becomes the trap's spot -
+            // the scout walks there and sets it on arrival (PlaceTrapAt tests the spot again).
+            if (_trapsEnabled.Value && now >= sc.NextTrapAt)
+            {
+                string why;
+                if (TrapSpotOk(hit.position, out why))
+                {
+                    sc.Placing = true; sc.ErrandAt = hit.position; sc.ErrandSince = now; sc.ErrandRun = false;
+                }
+                else sc.NextTrapAt = now + 15f;         // not here; look again a few steps on
+            }
             return true;
+        }
+
+        /// <summary>It found you: home at a run, the camp remembers where, a wave if allowed.</summary>
+        private void ScoutFound(AIs.HumanAIGroup g, AIs.HumanAI m, ScoutState sc, Vector3 home, Being target, float dt, bool sees)
+        {
+            float now = Time.time;
+            sc.FoundAt = now;
+            sc.Errand = null; sc.Placing = false;
+            sc.RetreatUntil = now + _scoutRetreat.Value;
+            Vector3 here = m.transform.position;
+            m.m_StartPosition = home;
+            Vector3 back = home - here; back.y = 0f;
+            if (back.sqrMagnitude > 0.01f) m.m_StartForward = back.normalized;
+            m.m_MoveStyle = Enums.AIMoveStyle.Run;
+            RememberSeen(g, target.transform.position);
+            Say("A scout spotted you at " + Mathf.RoundToInt(dt) + " m - it backs off");
+            Logger.LogInfo("scouts: '" + m.name + "' found you at " + dt.ToString("F0") + " m (" + (sees ? "saw you" : "walked into you") + ") - running home");
+            if (_scoutAlarmsCamp.Value) Alarm(g, target.transform.position, "scout's report", true);
+            if (_scoutWave.Value) ScoutWave(g);
+        }
+
+        // THE SCOUT SEES FIRST. The log of the session where he "never met a scout - the ones that
+        // see me just attack": three scouts assigned, none ever "found you". The race: the scout's
+        // own SightModule hands it the player as enemy, HumanAIGroup.UpdateState asks
+        // ShouldSetAttackState in that same frame, and the whole camp is in Attack before the
+        // scout's walk (a postfix, Calm only) gets a turn. So the scout's sighting is taken here,
+        // in a prefix on that very question: a calm camp's scout holding the player as enemy has
+        // found you - it turns for home and its enemy is cleared, so the camp does not attack on
+        // its report (unless ScoutAlarmsCamp says it should). A grouped native changes state only
+        // through its group (HumanAI.UpdateMe, IL), so this is the one door.
+        [HarmonyPatch(typeof(AIs.HumanAIGroup), "ShouldSetAttackState")]
+        private static class Patch_ScoutSeesFirst
+        {
+            private static void Prefix(AIs.HumanAIGroup __instance)
+            {
+                if (s_Self == null || !s_Self._scoutsEnabled.Value || s_Self._scoutAlarmsCamp.Value) return;
+                try
+                {
+                    if (!Ours(__instance) || !__instance.m_Active || __instance.m_Members == null) return;
+                    if (__instance.m_State != AIs.HumanAIGroup.State.Calm) return;
+                    Being target = null; bool looked = false;
+                    for (int i = 0; i < __instance.m_Members.Count; i++)
+                    {
+                        AIs.HumanAI m = __instance.m_Members[i];
+                        if (m == null || m.m_EnemyModule == null || m.m_EnemyModule.m_Enemy == null) continue;
+                        ScoutState sc;
+                        if (!s_Scouts.TryGetValue(m, out sc)) continue;
+                        if (!looked) { looked = true; target = HuntTarget(); }
+                        Being e = m.m_EnemyModule.m_Enemy;
+                        bool player = (target != null && e == target) || (e.gameObject != null && (GameObjectExtension.IsPlayer(e.gameObject) || e.GetComponentInParent<Player>() != null));
+                        if (!player) continue;
+                        float now = Time.time;
+                        if (now >= sc.RetreatUntil)
+                        {
+                            RoamState st; Vector3 home = m.m_StartPosition;
+                            if (s_Self._roam.TryGetValue(m, out st)) home = st.Home;
+                            float dt = Vector3.Distance(m.transform.position, e.transform.position);
+                            bool sees = m.m_SightModule != null && m.m_SightModule.m_VisibleBeings != null && m.m_SightModule.m_VisibleBeings.Contains(e);
+                            s_Self.ScoutFound(__instance, m, sc, home, e, dt, sees);
+                        }
+                        m.m_EnemyModule.SetEnemy(null);
+                        m.m_EnemyModule.m_PriorityEnemy = null;
+                    }
+                }
+                catch (Exception ex) { s_Self.HuntLog("scout sighting failed: " + ex.Message); }
+            }
+        }
+
+        // KILLING A SCOUT BRINGS A WAVE. His rule, 2026-09-20: "Killing a scout will bring a wave to
+        // the point where that scout was killed." The wave is the game's own, spawned around you -
+        // which is where the scout fell - and the camp remembers the spot.
+        [HarmonyPatch(typeof(AIs.HumanAI), "OnDie")]
+        private static class Patch_ScoutDies
+        {
+            private static void Postfix(AIs.HumanAI __instance)
+            {
+                if (s_Self == null || !s_Self._scoutsEnabled.Value || !s_Self._scoutDeathWave.Value) return;
+                try
+                {
+                    if (!IsScout(__instance)) return;
+                    AIs.HumanAIGroup g = __instance.m_Group;
+                    Vector3 at = __instance.transform.position;
+                    s_Scouts.Remove(__instance);
+                    if (g != null) RememberSeen(g, at);
+                    s_Self.Logger.LogInfo("scouts: '" + __instance.name + "' was killed - a wave is called to the spot");
+                    s_Self.Say("You killed a scout - a wave is coming");
+                    s_Self.ScoutWave(g);
+                }
+                catch (Exception ex) { s_Self.HuntLog("scout death failed: " + ex.Message); }
+            }
         }
 
         private void ScoutWave(AIs.HumanAIGroup g)
@@ -267,7 +397,7 @@ namespace GHSmartNatives
             try
             {
                 float last;
-                if (s_LastScoutWave.TryGetValue(g, out last) && Time.time - last < _scoutWaveCooldown.Value)
+                if (g != null && s_LastScoutWave.TryGetValue(g, out last) && Time.time - last < _scoutWaveCooldown.Value)
                 {
                     Logger.LogInfo("scouts: wave not called - '" + g.name + "' called one " + Mathf.RoundToInt(Time.time - last) + " s ago");
                     return;
@@ -279,7 +409,7 @@ namespace GHSmartNatives
                 int count = NumbersOn() ? Roll() : Mathf.Max(_membersMin.Value, 1);
                 AIs.HumanAIWave wave = mgr.SpawnWave(count, false, null);
                 if (wave == null) { Logger.LogInfo("scouts: the game declined the wave just now"); return; }
-                s_LastScoutWave[g] = Time.time;
+                if (g != null) s_LastScoutWave[g] = Time.time;
                 Say("The scout's wave is coming - " + wave.m_Count + " native(s)");
             }
             catch (Exception ex) { HuntLog("scout wave failed: " + ex.Message); }

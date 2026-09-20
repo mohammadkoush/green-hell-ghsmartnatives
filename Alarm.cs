@@ -11,12 +11,14 @@
 //   - a trap of theirs being stepped on (prefix BowTrap.OnEnterTrigger)  -> the owning camp
 //   - the hunt's own notice, so a noticed camp calls its neighbours too
 //
-// THE TRAPS are the game's own Tribe_Bow_Trap (ItemID 618), the one the tribes leave in their
-// villages, created with ItemsManager.CreateItem(id, im_register:false, ...) so they are never
-// written into the save; a ring of them appears when a camp activates and is destroyed when it
-// deactivates. With an arrow (the default) they shoot exactly as the game's do - BowTrap.OnEnterTrigger
-// fires on the player and calls Shot(); the arrow is a Tribe_Arrow set through the trap's own
-// private SetArrow/Arm. Without one the trip still rings the alarm, which is his point.
+// THE TRAPS are the game's own tribe_spike_trap (619; Tribe_Bow_Trap 618 by choice), made with
+// ItemsManager.CreateItem and flagged m_CantSave so they never enter the save. SET BY SCOUTS ONLY.
+// His rule, 2026-09-20: "Make sure a trap is not set up but by a scout. No automatic trap placing
+// randomly. A scout must place that trap, to prevent traps being set up inside a camp the player
+// makes. A wandering scout checks on traps and places random traps to bring the number back up
+// to six." The ring that used to appear when a camp woke is gone; a scout on its walk picks a spot,
+// walks there, and sets one (PlaceTrapAt, from Scouts.cs) - never within PlayerCampClearMetres of
+// anything he built. A trap that fires stays sprung until a scout comes to it.
 //
 // Language level is C# 5 (stock Framework csc.exe) - no ?., no $"", no ??=.
 
@@ -34,8 +36,9 @@ namespace GHSmartNatives
         private ConfigEntry<bool>  _callEnabled;
         private ConfigEntry<float> _callRadius;
         private ConfigEntry<bool>  _trapsEnabled;
-        private ConfigEntry<int>   _trapsPerCamp;
-        private ConfigEntry<float> _trapRing;
+        private ConfigEntry<float> _trapClear;
+        private ConfigEntry<float> _trapEvery;
+        private ConfigEntry<float> _trapGap;
         private ConfigEntry<bool>  _trapsArmed;
         private ConfigEntry<float> _trapsForget;
         private ConfigEntry<float> _trapTrip;
@@ -54,14 +57,20 @@ namespace GHSmartNatives
             _callRadius = Config.Bind("Alarm", "CallRadiusMetres", 120f,
                 new ConfigDescription("How far a call to arms carries, measured to the nearest member " +
                     "of the other camp.", new AcceptableValueRange<float>(20f, 400f)));
-            _trapsEnabled = Config.Bind("Alarm", "TrapsAroundCamp", true,
-                "A ring of the tribes' own bow traps appears around a camp when it wakes. Stepping " +
-                "on one is a call to arms, arrow or no arrow.");
-            _trapsPerCamp = Config.Bind("Alarm", "TrapsPerCamp", 3,
-                new ConfigDescription("How many traps in the ring.", new AcceptableValueRange<int>(1, 8)));
-            _trapRing = Config.Bind("Alarm", "TrapRingMetres", 18f,
-                new ConfigDescription("How far from the camp's centre the ring sits.",
-                    new AcceptableValueRange<float>(6f, 40f)));
+            // KEY RENAMED (TrapsAroundCamp -> ScoutsSetTraps) so the cfg takes the new meaning.
+            _trapsEnabled = Config.Bind("Alarm", "ScoutsSetTraps", true,
+                "Scouts set the tribes' own traps where they walk, one at a time, up to MaxTraps. " +
+                "Nothing else places a trap. Stepping on one hurts and brings a scout.");
+            _trapEvery = Config.Bind("Alarm", "ScoutSetsTrapEverySeconds", 60f,
+                new ConfigDescription("A scout sets at most one trap per this many seconds.",
+                    new AcceptableValueRange<float>(10f, 600f)));
+            _trapClear = Config.Bind("Alarm", "PlayerCampClearMetres", 15f,
+                new ConfigDescription("No native trap is set within this distance of anything you built. " +
+                    "His question: 'how did a trap get set up inside my camp?'",
+                    new AcceptableValueRange<float>(0f, 60f)));
+            _trapGap = Config.Bind("Alarm", "TrapSpacingMetres", 10f,
+                new ConfigDescription("No two native traps closer than this.",
+                    new AcceptableValueRange<float>(2f, 40f)));
             _trapsForget = Config.Bind("Alarm", "TrapsVanishBeyondMetres", 150f,
                 new ConfigDescription("A camp's traps stay after the camp is wiped or asleep, until you are " +
                     "this far from them. His test: 'I thought I saw a trap, but I could not find it after " +
@@ -235,73 +244,112 @@ namespace GHSmartNatives
         }
         private static int s_TrapLogged;
 
-        [HarmonyPatch(typeof(AIs.HumanAIGroup), "Activate")]
-        private static class Patch_TrapsOnWake
+        /// <summary>Anything he built within PlayerCampClearMetres: his camp, not theirs to trap.</summary>
+        private bool NearPlayerBuild(Vector3 at)
         {
-            private static void Postfix(AIs.HumanAIGroup __instance)
+            float r = _trapClear.Value;
+            if (r <= 0f) return false;
+            List<Construction> all = Construction.s_AllConstructions;
+            if (all == null) return false;
+            float r2 = r * r;
+            for (int i = 0; i < all.Count; i++)
             {
-                if (s_Self == null) return;
-                try { s_Self.PlaceTraps(__instance); }
-                catch (Exception ex) { s_Self.HuntLog("traps failed: " + ex.Message); }
+                Construction c = all[i];
+                if (c == null || c.IsSceneObject() || c.m_BadTribeConstruction || s_Traps.ContainsKey(c)) continue;
+                Vector3 d = c.transform.position - at; d.y = 0f;
+                if (d.sqrMagnitude < r2) return true;
             }
+            return false;
         }
 
-        private void PlaceTraps(AIs.HumanAIGroup g)
+        private bool NearOtherTrap(Vector3 at)
         {
-            if (!_trapsEnabled.Value || g == null || !Ours(g) || g.IsWave() || g.IsPatrol()) return;
+            float r2 = _trapGap.Value * _trapGap.Value;
+            foreach (KeyValuePair<Item, AIs.HumanAIGroup> kv in s_Traps)
+            {
+                if (kv.Key == null) continue;
+                Vector3 d = kv.Key.transform.position - at; d.y = 0f;
+                if (d.sqrMagnitude < r2) return true;
+            }
+            return false;
+        }
+
+        /// <summary>Is this a spot a scout may trap? The same test at choosing and at setting.</summary>
+        internal bool TrapSpotOk(Vector3 at, out string why)
+        {
+            why = null;
+            if (s_Traps.Count >= Mathf.Max(1, _trapsMax.Value)) { why = "the world has its " + _trapsMax.Value; return false; }
+            if (NearPlayerBuild(at)) { why = "too close to something you built"; return false; }
+            if (NearOtherTrap(at)) { why = "too close to another trap"; return false; }
+            Player p = Player.Get();
+            if (p != null && Vector3.Distance(p.transform.position, at) < 6f) { why = "you are standing there"; return false; }
+            return true;
+        }
+
+        /// <summary>One trap, set by a scout standing at the spot. The only way a trap is made.</summary>
+        internal bool PlaceTrapAt(AIs.HumanAIGroup g, Vector3 at, AIs.HumanAI by)
+        {
+            if (!_trapsEnabled.Value) return false;
             ItemsManager im = ItemsManager.Get();
-            if (im == null) return;
-
-            // The camp's centre: its spawn points, or failing that the group object itself.
-            Vector3 centre = g.transform.position; int n = 0;
-            if (g.m_SimpleAiSpawners != null)
+            if (im == null) return false;
+            string why;
+            if (!TrapSpotOk(at, out why))
             {
-                Vector3 sum = Vector3.zero;
-                for (int i = 0; i < g.m_SimpleAiSpawners.Count; i++)
-                    if (g.m_SimpleAiSpawners[i] != null) { sum += g.m_SimpleAiSpawners[i].transform.position; n++; }
-                if (n > 0) centre = sum / n;
+                if (s_TrapLogged < 12) { s_TrapLogged++; Logger.LogInfo("traps: '" + (by != null ? by.name : "?") + "' set no trap - " + why); }
+                return false;
             }
-
-            int placed = 0, want = _trapsPerCamp.Value;
-            MakeRoomFor(want);
-            float start = UnityEngine.Random.Range(0f, 360f);
-            for (int i = 0; i < want; i++)
+            NavMeshHit hit;
+            if (!NavMesh.SamplePosition(at, out hit, 4f, NavMesh.AllAreas)) return false;
+            Vector3 dir = (by != null) ? by.transform.forward : Vector3.forward; dir.y = 0f;
+            if (dir.sqrMagnitude < 0.01f) dir = Vector3.forward;
+            bool spikes = _trapKind.Value != "Bow";
+            Item item = im.CreateItem(spikes ? Enums.ItemID.tribe_spike_trap : Enums.ItemID.Tribe_Bow_Trap, false, hit.position, Quaternion.LookRotation(dir.normalized, Vector3.up), false);
+            if (item == null) return false;
+            bool ok = spikes ? (item is Spikes || item.GetComponent<Spikes>() != null) : (item is BowTrap || item.GetComponent<BowTrap>() != null);
+            if (!ok)
             {
-                float ang = start + i * (360f / want) + UnityEngine.Random.Range(-20f, 20f);
-                Vector3 dir = Quaternion.Euler(0f, ang, 0f) * Vector3.forward;
-                Vector3 at = centre + dir * _trapRing.Value;
-                NavMeshHit hit;
-                if (!NavMesh.SamplePosition(at, out hit, 6f, NavMesh.AllAreas)) continue;
-                // Facing outward (a bow trap's arrow flies at whoever walks in from outside the ring).
-                bool spikes = _trapKind.Value != "Bow";
-                Item item = im.CreateItem(spikes ? Enums.ItemID.tribe_spike_trap : Enums.ItemID.Tribe_Bow_Trap, false, hit.position, Quaternion.LookRotation(dir, Vector3.up), false);
-                if (item == null) continue;
-                bool ok = spikes ? (item is Spikes || item.GetComponent<Spikes>() != null) : (item is BowTrap || item.GetComponent<BowTrap>() != null);
-                if (!ok)
-                {
-                    HuntLog((spikes ? "tribe_spike_trap" : "Tribe_Bow_Trap") + " created but carries no trap component (" + item.GetType().Name + ") - removed");
-                    UnityEngine.Object.Destroy(item.gameObject);
-                    continue;
-                }
-                s_Traps[item] = g;
-                s_TrapSetAt[item] = Time.time;
-                // NEVER INTO THE SAVE. His report, 2026-09-20: "I don't think we're keeping only six
-                // traps at most. I keep breaking traps and I keep finding more." This session's log
-                // placed six, so the extras were not placed - they were LOADED. Item.CanSave (IL):
-                // an item is saved unless m_CantSave, and Spikes.Save writes SpikesArmed and
-                // SpikesMask, so every trap standing at save time came back on load: untracked,
-                // uncounted, unswept, and handleable again. m_CantSave is the game's own flag for
-                // items that must not persist (charcoal stands, forge inserts); the same here.
-                item.m_CantSave = true;
-                placed++;
-                if (spikes && !_spikesHidden.Value) UnmaskSpikes(item as Spikes ?? item.GetComponent<Spikes>());
-                if (_trapsArmed.Value) ArmTrap(item, im, hit.position);    // and the re-arm tick looks again in a few seconds
+                HuntLog((spikes ? "tribe_spike_trap" : "Tribe_Bow_Trap") + " created but carries no trap component (" + item.GetType().Name + ") - removed");
+                UnityEngine.Object.Destroy(item.gameObject);
+                return false;
             }
-            if (placed > 0 && s_TrapLogged < 8)
+            s_Traps[item] = g;
+            s_TrapSetAt[item] = Time.time;
+            // NEVER INTO THE SAVE. His report, 2026-09-20: "I don't think we're keeping only six
+            // traps at most. I keep breaking traps and I keep finding more." That session's log
+            // placed six, so the extras were not placed - they were LOADED. Item.CanSave (IL):
+            // an item is saved unless m_CantSave, and Spikes.Save writes SpikesArmed and
+            // SpikesMask, so every trap standing at save time came back on load: untracked,
+            // uncounted, unswept, and handleable again. m_CantSave is the game's own flag for
+            // items that must not persist (charcoal stands, forge inserts); the same here.
+            item.m_CantSave = true;
+            if (spikes && !_spikesHidden.Value) UnmaskSpikes(item as Spikes ?? item.GetComponent<Spikes>());
+            if (_trapsArmed.Value) ArmTrap(item, im, hit.position);    // and the re-arm tick looks again in a few seconds
+            if (s_TrapLogged < 12)
             {
                 s_TrapLogged++;
-                Logger.LogInfo("traps: " + placed + " of " + want + " set around '" + g.name + "' at " + Mathf.RoundToInt(_trapRing.Value)
-                    + " m (centre from " + n + " spawn point(s)), " + (_trapKind.Value != "Bow" ? "spikes" : "bow traps") + (_trapsArmed.Value ? ", armed" : ", alarm only"));
+                Player p = Player.Get();
+                Logger.LogInfo("traps: '" + (by != null ? by.name : "?") + "' of '" + (g != null ? g.name : "no camp") + "' set a "
+                    + (spikes ? "spike trap" : "bow trap") + (p != null ? " " + Mathf.RoundToInt(Vector3.Distance(p.transform.position, hit.position)) + " m from you" : "")
+                    + " - " + s_Traps.Count + " of " + _trapsMax.Value + " in the world");
+            }
+            return true;
+        }
+
+        /// <summary>A scout passing a sprung trap resets it - "a wandering scout checks on traps".</summary>
+        internal void ResetTrapsNear(AIs.HumanAI m)
+        {
+            if (!_trapsArmed.Value) return;
+            Vector3 here = m.transform.position;
+            foreach (KeyValuePair<Item, AIs.HumanAIGroup> kv in s_Traps)
+            {
+                Item t = kv.Key;
+                if (t == null || TrapArmed(t)) continue;
+                if (Vector3.Distance(t.transform.position, here) > 4f) continue;
+                if (ArmTrap(t, ItemsManager.Get(), t.transform.position))
+                {
+                    s_TrippedAt.Remove(t);
+                    Logger.LogInfo("scouts: '" + m.name + "' reset a sprung trap it passed");
+                }
             }
         }
 
@@ -422,12 +470,21 @@ namespace GHSmartNatives
         private void TripResponse(AIs.HumanAIGroup g, Item trap, Vector3 at, string why)
         {
             if (_tripScout.Value && TripSendsScout(g, trap, at)) return;
-            Say("You tripped a native trap - the camp is alarmed");
+            // 35 of these in one session's log, one every 20 s while he stood by a sprung trap
+            // mid-fight; the camp was already on him. Said once a minute, with the reason.
+            if (Time.time - s_TripSaidAt > 60f)
+            {
+                s_TripSaidAt = Time.time;
+                Say(g != null && g.m_Active && g.m_State == AIs.HumanAIGroup.State.Attack
+                    ? "You tripped a native trap - its camp is already fighting you"
+                    : "You tripped a native trap - no calm camp is left to send a scout");
+            }
             if (g != null && g.m_Active) Alarm(g, at, why, true);
             else CallNeighbours(g, at);
         }
 
         private float _trapTripAt;
+        private static float s_TripSaidAt = -100f;
         private static readonly Dictionary<Item, float> s_TrippedAt = new Dictionary<Item, float>();
         private static bool s_TripHandled;
 

@@ -46,3 +46,21 @@ it crouches where it is. Read as:
   walking out past 20 m, or out of its sight, ends the watch. Open whether that resets the
   count or pauses it (the open question above, still open).
 - 20 m is a number; open whether it is its own slider or the existing ScoutKeep (20 m today).
+
+**Thugs: "not joining the waves for sure."**
+Reported 2026-09-20 after a session that ran 1.7.2 (the log's load line). The camp-attack Thug
+fix (BossCampMinMembers, 1.7.3) was built during that session and first deployed today inside
+1.8.0, so it has not been played yet. Nothing to change until a 1.8.0 log is read: look for
+"numbers: camp attack ... Thug" lines and their skip reasons.
+
+**Sense through walls, by what he is doing.**
+His words: "Natives sense me two metres from behind walls. That's it. And especially if I'm
+making walking noise. And 4 m when I'm running noise, but not when I'm moving in crouch
+position." Today SenseRangeMetres is one number (4 m). Read as three:
+- crouched (sneaking, or crouched and still): 0 - they do not sense him through walls at all
+- walking: 2 m
+- running: 4 m
+The game's sense (AIParams.m_EnemySenseRange, shared per kind) does not know his move style,
+so the number is set each tick from FPPController (IsDuck / IsRunning) - set, not chased.
+- Open: standing still, upright - walking's 2 m, or crouching's 0? Read as 2 m (upright).
+- Open: three sliders, or the two numbers with crouch fixed at 0.

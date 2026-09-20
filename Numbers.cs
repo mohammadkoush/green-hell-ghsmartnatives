@@ -40,6 +40,7 @@ namespace GHSmartNatives
         private ConfigEntry<int>   _bossFrom;
         private ConfigEntry<bool>  _bossInAttacks;
         private ConfigEntry<int>   _bossEveryNth;
+        private ConfigEntry<int>   _bossCampMin;
         private ConfigEntry<float> _cooldown;
         private ConfigEntry<KeyboardShortcut> _waveKey;
 
@@ -66,6 +67,12 @@ namespace GHSmartNatives
             _bossInAttacks = Config.Bind("Numbers", "BossInCampAttacks", true,
                 "When a camp of BossFromCount or more attacks you without a Thug among them, a Thug " +
                 "is sent to join - every Nth such attack.");
+            // "Still no Thug": that session's camps rolled 2 and 3 members, and the camp rule
+            // borrowed the wave's floor of 4. A camp of two gets its Thug now; only a lone native
+            // does not. BossFromCount stays the WAVE's floor.
+            _bossCampMin = Config.Bind("Numbers", "BossCampMinMembers", 2,
+                new ConfigDescription("A camp attack brings a Thug only when the camp has at least this many.",
+                    new AcceptableValueRange<int>(1, 12)));
             _bossEveryNth = Config.Bind("Numbers", "BossEveryNthAttack", 2,
                 new ConfigDescription("1 = every camp attack brings a Thug, 2 = every other, and so on.",
                     new AcceptableValueRange<int>(1, 10)));
@@ -222,8 +229,12 @@ namespace GHSmartNatives
             {
                 if (!NumbersOn() || !_bossInAttacks.Value || _bossFrom.Value <= 0) return;
                 if (g == null || g.IsWave() || !Ours(g) || g.m_Members == null) return;
-                if (g.m_Members.Count < _bossFrom.Value) return;
-                for (int i = 0; i < g.m_Members.Count; i++) if (IsBoss(g.m_Members[i])) return;
+                if (g.m_Members.Count < _bossCampMin.Value)
+                {
+                    NumbersLog("camp '" + g.name + "' attacks with " + g.m_Members.Count + " - fewer than " + _bossCampMin.Value + ", no Thug");
+                    return;
+                }
+                for (int i = 0; i < g.m_Members.Count; i++) if (IsBoss(g.m_Members[i])) { NumbersLog("camp '" + g.name + "' attacks - has a Thug already"); return; }
                 s_CampAttacks++;
                 int every = Mathf.Max(1, _bossEveryNth.Value);
                 if (s_CampAttacks % every != 0)

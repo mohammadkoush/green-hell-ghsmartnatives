@@ -35,6 +35,7 @@ namespace GHSmartNatives
         private ConfigEntry<float> _volSneak;
         private ConfigEntry<float> _volWalk;
         private ConfigEntry<float> _volRun;
+        private ConfigEntry<float> _senseRange;
 
         private void BindStealthConfig()
         {
@@ -47,6 +48,13 @@ namespace GHSmartNatives
             _stillSight = Config.Bind("Stealth", "StillCrouchSightFactor", 0.5f,
                 new ConfigDescription("Natives' sight range is multiplied by this while you are crouched AND still " +
                     "(the game's is 10 m).", new AcceptableValueRange<float>(0.1f, 1f)));
+            // "They can still sense me behind walls." Two things do that, and one is the game's:
+            // EnemySenseRange, 7 m in any direction through anything, no eyes involved. It is a
+            // number in the same shared params, so it gets the same treatment - set, restored.
+            // (The other is Hunt's keep-hunting radius: a camp already on him stays on him.)
+            _senseRange = Config.Bind("Stealth", "SenseRangeMetres", 4f,
+                new ConfigDescription("How close a native senses you through anything, walls included " +
+                    "(the game's is 7 m). 0 = leave the game's.", new AcceptableValueRange<float>(0f, 12f)));
             _volSneak = Config.Bind("Stealth", "StepVolumeCrouched", 0.45f,
                 new ConfigDescription("How loud your own crouched steps are to you.", new AcceptableValueRange<float>(0f, 2f)));
             _volWalk = Config.Bind("Stealth", "StepVolumeWalking", 0.85f,
@@ -82,7 +90,7 @@ namespace GHSmartNatives
         // What the natives hear and see
         // -----------------------------------------------------------------------------------------
 
-        private class ParamsOriginal { public float Sneak; public float Sight; }
+        private class ParamsOriginal { public float Sneak; public float Sight; public float Sense; }
         private readonly Dictionary<AIs.AIParams, ParamsOriginal> _paramsOrig = new Dictionary<AIs.AIParams, ParamsOriginal>();
         private bool _stillCrouched;
         private Vector3 _lastPlayerPos;
@@ -121,14 +129,16 @@ namespace GHSmartNatives
                 ParamsOriginal o;
                 if (!_paramsOrig.TryGetValue(prm, out o))
                 {
-                    o = new ParamsOriginal(); o.Sneak = prm.m_HearingSneakRange; o.Sight = prm.m_SightRange;
+                    o = new ParamsOriginal(); o.Sneak = prm.m_HearingSneakRange; o.Sight = prm.m_SightRange; o.Sense = prm.m_EnemySenseRange;
                     _paramsOrig[prm] = o;
-                    HuntLog("stealth: '" + m.name + "' kind hears a crouched step at " + o.Sneak.ToString("F1") + " m and sees " + o.Sight.ToString("F1") + " m by the game");
+                    HuntLog("stealth: '" + m.name + "' kind hears a crouched step at " + o.Sneak.ToString("F1") + " m, sees " + o.Sight.ToString("F1") + " m and senses " + o.Sense.ToString("F1") + " m by the game");
                 }
                 float wantSneak = Mathf.Max(0.5f, o.Sneak - _sneakMinus.Value);
                 float wantSight = _stillCrouched ? o.Sight * _stillSight.Value : o.Sight;
                 if (Mathf.Abs(prm.m_HearingSneakRange - wantSneak) > 0.01f) prm.m_HearingSneakRange = wantSneak;
                 if (Mathf.Abs(prm.m_SightRange - wantSight) > 0.01f) prm.m_SightRange = wantSight;
+                float wantSense = (_senseRange.Value > 0f) ? _senseRange.Value : o.Sense;
+                if (Mathf.Abs(prm.m_EnemySenseRange - wantSense) > 0.01f) prm.m_EnemySenseRange = wantSense;
             }
         }
 
@@ -136,7 +146,7 @@ namespace GHSmartNatives
         {
             foreach (KeyValuePair<AIs.AIParams, ParamsOriginal> kv in _paramsOrig)
             {
-                try { if (kv.Key != null) { kv.Key.m_HearingSneakRange = kv.Value.Sneak; kv.Key.m_SightRange = kv.Value.Sight; } }
+                try { if (kv.Key != null) { kv.Key.m_HearingSneakRange = kv.Value.Sneak; kv.Key.m_SightRange = kv.Value.Sight; kv.Key.m_EnemySenseRange = kv.Value.Sense; } }
                 catch (Exception) { }
             }
             _paramsOrig.Clear();

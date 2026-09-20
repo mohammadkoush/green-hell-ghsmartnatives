@@ -20,6 +20,8 @@ each on its own switch, all through the game's own AI:
   cooldown). A scout hangs back in any fight.
 - **Tactics.** Archers (hunters) hold their distance and throw while the others close in; the Thug
   waits at a distance until you are surrounded, a member is lost, or a timer runs out — then comes.
+- **Stealth.** Crouched steps are heard from two metres less; standing still while crouched halves
+  how far natives see you; your own footsteps sound as loud as the noise they make.
 - **Alarm.** A camp that starts hunting calls every calm camp within range into it. Each camp wakes
   with a ring of the tribes' own spike traps around it (bow traps by choice); stepping on one hurts,
   and sends a scout to look.
@@ -55,6 +57,9 @@ panel too.
 | `Roam.SearchRadiusMetres` | 60 | how wide the sweep around the last sighting grows |
 | `Roam.ForgetSeconds` | 120 | no sighting or sound for this long ends the search |
 | `Roam.StepMetres` | 12 | how long each searching step is |
+| `Stealth.CrouchHeardMinusMetres` | 2 | crouched steps heard from this much less (the game's 5 m) |
+| `Stealth.StillCrouchSightFactor` | 0.5 | still and crouched, natives see this fraction of their range |
+| `Stealth.StepVolumeCrouched / Walking / Running` | 0.45 / 0.85 / 1.25 | your own steps, as loud as the noise they make |
 | `Scouts.ScoutsPerCamp` / `ScoutRadiusMetres` | 1 / 80 | how many go out, how far they range |
 | `Scouts.ScoutCallsWave` / `WaveCooldownSeconds` | on / 180 | the wave a sighting brings |
 | `Scouts.ScoutAlarmsCamp` | off | a sighting also brings the camp and its neighbours |

@@ -475,6 +475,7 @@ namespace GHSmartNatives
                     s_Self.HealBadEnemies(__instance);          // every group, ours or not
                     if (!Ours(__instance)) return;
                     s_Self.ApplySensesTo(__instance);
+                    s_Self.ApplyStealthTo(__instance);
                     s_Self.RoamTick(__instance);
                     s_Self.TacticsTick(__instance);
                     if (__instance.m_State == AIs.HumanAIGroup.State.Attack) ReadSenses(__instance, HuntTarget());

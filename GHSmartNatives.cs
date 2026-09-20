@@ -46,7 +46,7 @@ namespace GHSmartNatives
     {
         public const string Guid    = "com.mohammadkoush.ghsmartnatives";
         public const string Name    = "GHSmartNatives";
-        public const string Version = "1.5.1";
+        public const string Version = "1.6.0";
 
         private static GHSmartNativesPlugin s_Self;
         private Harmony _harmony;
@@ -78,6 +78,7 @@ namespace GHSmartNatives
             BindTacticsConfig();
             BindAlarmConfig();
             BindScoutConfig();
+            BindStealthConfig();
             BindNumbersConfig();
 
             try
@@ -100,7 +101,7 @@ namespace GHSmartNatives
 
         private void OnDestroy()
         {
-            try { RestoreSenses(); RestoreRoam(); RemoveTraps(null); } catch (Exception) { }
+            try { RestoreSenses(); RestoreRoam(); RestoreParams(); RemoveTraps(null); } catch (Exception) { }
             try { if (_harmony != null) _harmony.UnpatchSelf(); } catch (Exception) { }
         }
 
@@ -142,6 +143,7 @@ namespace GHSmartNatives
             {
                 if (!GameIsPlayable()) return;
                 NumbersTick();
+                StealthTick();
                 TrapSweep();
                 TrapTripByDistance();
                 TrapRearmTick();
@@ -278,6 +280,19 @@ namespace GHSmartNatives
                 _roamEveryMin.Value = Slider("A spot never reached is replaced after", _roamEveryMin.Value, 3f, 120f, " s", 0);
                 _roamEveryMax.Value = Slider("...and no later than", _roamEveryMax.Value, 5f, 240f, " s", 0);
                 if (_roamEveryMax.Value < _roamEveryMin.Value) _roamEveryMax.Value = _roamEveryMin.Value;
+            }
+
+            GUILayout.Space(8f);
+            GUILayout.Label("Stealth", _head);
+            bool ste = _stealthEnabled.Value;
+            if (Row("Crouching is heard from less far; still and crouched, they see half as far", ste) != ste) _stealthEnabled.Value = !ste;
+            if (_stealthEnabled.Value)
+            {
+                _sneakMinus.Value = Slider("Crouched steps heard from this much less (game: 5 m)", _sneakMinus.Value, 0f, 5f, " m", 1);
+                _stillSight.Value = Slider("Still and crouched: their sight range times", _stillSight.Value, 0.1f, 1f, "", 2);
+                _volSneak.Value = Slider("Your crouched steps, to you", _volSneak.Value, 0f, 2f, " x", 2);
+                _volWalk.Value  = Slider("Your walking steps", _volWalk.Value, 0f, 2f, " x", 2);
+                _volRun.Value   = Slider("Your running steps", _volRun.Value, 0f, 2f, " x", 2);
             }
 
             GUILayout.Space(8f);

@@ -41,6 +41,8 @@ $refs = @(
     (Join-Path $managed 'UnityEngine.ImageConversionModule.dll')
     # AIModule: NavMesh.SamplePosition, so a roaming native is sent to ground it can walk on.
     (Join-Path $managed 'UnityEngine.AIModule.dll')
+    # AudioModule: AudioClip, in the signature of the step-volume patch.
+    (Join-Path $managed 'UnityEngine.AudioModule.dll')
     (Join-Path $core    'BepInEx.dll')
     (Join-Path $core    '0Harmony.dll')
 )

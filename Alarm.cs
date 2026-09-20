@@ -285,6 +285,14 @@ namespace GHSmartNatives
                 }
                 s_Traps[item] = g;
                 s_TrapSetAt[item] = Time.time;
+                // NEVER INTO THE SAVE. His report, 2026-09-20: "I don't think we're keeping only six
+                // traps at most. I keep breaking traps and I keep finding more." This session's log
+                // placed six, so the extras were not placed - they were LOADED. Item.CanSave (IL):
+                // an item is saved unless m_CantSave, and Spikes.Save writes SpikesArmed and
+                // SpikesMask, so every trap standing at save time came back on load: untracked,
+                // uncounted, unswept, and handleable again. m_CantSave is the game's own flag for
+                // items that must not persist (charcoal stands, forge inserts); the same here.
+                item.m_CantSave = true;
                 placed++;
                 if (spikes && !_spikesHidden.Value) UnmaskSpikes(item as Spikes ?? item.GetComponent<Spikes>());
                 if (_trapsArmed.Value) ArmTrap(item, im, hit.position);    // and the re-arm tick looks again in a few seconds
@@ -505,6 +513,67 @@ namespace GHSmartNatives
                 { gone.Add(kv.Key); why.Add("left " + Mathf.RoundToInt(_trapsForget.Value) + " m behind"); }
             }
             for (int i = 0; i < gone.Count; i++) DropTrap(gone[i], why[i]);
+        }
+
+        // STRAYS FROM OLDER SAVES. Traps set before the m_CantSave fix are already in his save and
+        // come back with every load, outside this table. So the world is looked over: every tribal
+        // spike or bow trap that is not the level's own (CJObject.IsSceneObject - the story villages'
+        // traps are placed with the scene) and not in the table is taken in as ours with no camp -
+        // counted against the cap, swept by distance and life, unhandleable, and never saved again.
+        // Once at each load (the moment the game turns playable) and every minute after, so a trap
+        // that arrives any other way is caught too.
+        private float _strayAt = -999f;
+        internal void StraysDue() { _strayAt = -999f; }
+
+        private void AdoptStrayTraps()
+        {
+            if (Time.time - _strayAt < 60f) return;
+            _strayAt = Time.time;
+            if (!_trapsEnabled.Value) return;
+            try
+            {
+                List<Item> found = new List<Item>();
+                Spikes[] sp = UnityEngine.Object.FindObjectsOfType<Spikes>();
+                for (int i = 0; i < sp.Length; i++) found.Add(sp[i]);
+                BowTrap[] bt = UnityEngine.Object.FindObjectsOfType<BowTrap>();
+                for (int i = 0; i < bt.Length; i++) found.Add(bt[i]);
+                int adopted = 0;
+                for (int i = 0; i < found.Count; i++)
+                {
+                    Item t = found[i];
+                    if (t == null || s_Traps.ContainsKey(t)) continue;
+                    Enums.ItemID id = t.GetInfoID();
+                    if (id != Enums.ItemID.tribe_spike_trap && id != Enums.ItemID.Tribe_Bow_Trap) continue;
+                    if (t.IsSceneObject()) continue;
+                    t.m_CantSave = true;
+                    s_Traps[t] = null;
+                    s_TrapSetAt[t] = Time.time;
+                    s_ArmedOnce.Add(t);        // whatever state it loaded in is the state it keeps
+                    Spikes s = t as Spikes;
+                    if (s != null && !_spikesHidden.Value) UnmaskSpikes(s);
+                    adopted++;
+                }
+                if (adopted > 0)
+                {
+                    Logger.LogInfo("traps: " + adopted + " stray native trap(s) from an older save taken in - counted, swept, and never saved again");
+                    MakeRoomFor(0);
+                }
+            }
+            catch (Exception ex) { HuntLog("stray traps: " + ex.Message); }
+        }
+
+        // NOT BREAKABLE EITHER. "I keep breaking traps": a Construction takes weapon hits and
+        // falls after m_HitsCountToDestroy. His rule covers removal of any kind - a native trap is
+        // avoided, not hacked down.
+        [HarmonyPatch(typeof(Construction), "TakeDamage")]
+        private static class Patch_NativeTrapCannotBeBroken
+        {
+            private static bool Prefix(Construction __instance, ref bool __result)
+            {
+                if (!s_Traps.ContainsKey(__instance)) return true;
+                __result = false;
+                return false;
+            }
         }
 
         // THEIRS, NOT HIS. His words: "the trap should not be removed by the player or interacted

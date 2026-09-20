@@ -46,7 +46,7 @@ namespace GHSmartNatives
     {
         public const string Guid    = "com.mohammadkoush.ghsmartnatives";
         public const string Name    = "GHSmartNatives";
-        public const string Version = "1.7.3";
+        public const string Version = "1.7.4";
 
         private static GHSmartNativesPlugin s_Self;
         private Harmony _harmony;
@@ -124,7 +124,7 @@ namespace GHSmartNatives
                 if (Player.Get() == null) return NotYet();
                 if (_agreedAt < 0f) _agreedAt = Time.realtimeSinceStartup;
                 if (Time.realtimeSinceStartup - _agreedAt < 1f) return false;
-                if (!_playable) { _playable = true; Logger.LogInfo("game is playable - panel and ticks are live"); }
+                if (!_playable) { _playable = true; StraysDue(); Logger.LogInfo("game is playable - panel and ticks are live"); }
                 return true;
             }
             catch (Exception) { return true; }
@@ -147,6 +147,7 @@ namespace GHSmartNatives
                 TrapSweep();
                 TrapTripByDistance();
                 TrapRearmTick();
+                AdoptStrayTraps();
                 if (_key.Value.IsDown()) SetOpen(!_open);
                 if (_open && Input.GetKeyDown(KeyCode.Escape)) SetOpen(false);
             }

@@ -24,7 +24,9 @@ each on its own switch, all through the game's own AI:
   how far natives see you; your own footsteps sound as loud as the noise they make.
 - **Alarm.** A camp that starts hunting calls every calm camp within range into it. Each camp wakes
   with a ring of the tribes' own spike traps around it (bow traps by choice); stepping on one hurts,
-  and sends a scout to look.
+  and sends a scout to look. A native trap cannot be taken, disarmed or hacked down - only avoided.
+  Traps are never written into the save; any left in a save by an older version are taken in on
+  load and fall under the same cap and sweep.
 - **Numbers.** Camp groups, patrols and waves spawn a random number between a floor and a ceiling
   (default 2 to 5) instead of the game's slow ramp. A wave of 4 or more always brings one Thug.
 

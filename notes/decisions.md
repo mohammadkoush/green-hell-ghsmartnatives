@@ -52,12 +52,16 @@ His words: "Within the 15 seconds, if the player notices the scout and approache
 runs away instantly, trying to call for a wave." Read as: while the scout crouches and counts,
 him closing the distance breaks the watch - the scout is up and running home at once. "Trying
 to call" = the wave is not guaranteed: it calls only if it gets away; kill it on the run and
-there is no wave (rule one). So the wave from a broken watch comes when the scout reaches
-home, not the moment it turns.
+there is no wave (rule one).
+His correction: "Runaway means trying to get the timer to reach 15 sec before a player kills
+it." So ONE timer, started at the first sighting, running whether the scout crouches or runs.
+It reaches 15 s: the wave is called, wherever the scout is. The scout dies first: no wave. The
+run is not a second phase, it is the same count with the scout moving instead of crouching -
+its way of staying alive until the count is done. After the call it keeps going home as today.
 - Open: what "approaches" is - read as him getting closer than he was when the watch began,
   by a few metres (~3 m), or within ~8 m of it.
-- Open: a full watch (15 s uninterrupted) - does the wave come the moment it is up, as today,
-  or also only once it is home? Read as: at once, the watch earned it.
+- Open: the timer while he is out of its sight or past 20 m - keeps running once started, or
+  pauses. Read as: keeps running once started (it has seen him; it is counting to the call).
 
 **Thugs: "not joining the waves for sure."**
 Reported 2026-09-20 after a session that ran 1.7.2 (the log's load line). The camp-attack Thug

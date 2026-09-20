@@ -29,6 +29,8 @@ Understanding so far (not yet confirmed by him):
   Out of sight resets or pauses the count - open which.
 - During the 15 seconds the scout keeps watching (holds where it is, or keeps its distance),
   it does not walk up and it does not attack; the camp is not told yet.
-- The 15 seconds are a setting on the Scouts tab.
+- The 15 seconds are a setting on the Scouts tab. His words: "Let's make it a slider from 0 to
+  15 seconds." Range 0 to 15; 0 = the call is instant, as today. Default open - 15 is what he
+  named first.
 - Open: does the scout back off to keep watching from ScoutKeep distance, or freeze in place?
 - Open: is the count continuous (broken line of sight starts over) or accumulated?

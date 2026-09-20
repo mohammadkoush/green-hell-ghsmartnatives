@@ -240,9 +240,11 @@ namespace GHSmartNatives
         {
             try { if (t != null) UnityEngine.Object.Destroy(t.gameObject); } catch (Exception) { }
             s_Traps.Remove(t); s_TrapSetAt.Remove(t); s_TrippedAt.Remove(t); s_ArmedOnce.Remove(t);
-            if (s_TrapLogged < 12) { s_TrapLogged++; Logger.LogInfo("traps: one removed - " + why); }
+            if (why.StartsWith("room")) { s_RoomRemoved++; return; }        // summed up by the caller
+            if (s_TrapLogged < 40) { s_TrapLogged++; Logger.LogInfo("traps: one removed - " + why); }
         }
         private static int s_TrapLogged;
+        private static int s_RoomRemoved;
 
         /// <summary>Anything he built within PlayerCampClearMetres: his camp, not theirs to trap.</summary>
         private bool NearPlayerBuild(Vector3 at)
@@ -295,7 +297,7 @@ namespace GHSmartNatives
             string why;
             if (!TrapSpotOk(at, out why))
             {
-                if (s_TrapLogged < 12) { s_TrapLogged++; Logger.LogInfo("traps: '" + (by != null ? by.name : "?") + "' set no trap - " + why); }
+                if (s_TrapLogged < 40) { s_TrapLogged++; Logger.LogInfo("traps: '" + (by != null ? by.name : "?") + "' set no trap - " + why); }
                 return false;
             }
             NavMeshHit hit;
@@ -324,7 +326,7 @@ namespace GHSmartNatives
             item.m_CantSave = true;
             if (spikes && !_spikesHidden.Value) UnmaskSpikes(item as Spikes ?? item.GetComponent<Spikes>());
             if (_trapsArmed.Value) ArmTrap(item, im, hit.position);    // and the re-arm tick looks again in a few seconds
-            if (s_TrapLogged < 12)
+            if (s_TrapLogged < 40)
             {
                 s_TrapLogged++;
                 Player p = Player.Get();
@@ -604,7 +606,10 @@ namespace GHSmartNatives
                     if (t.IsSceneObject()) continue;
                     t.m_CantSave = true;
                     s_Traps[t] = null;
-                    s_TrapSetAt[t] = Time.time;
+                    // A stray is old by definition and it must not hold the cap against the scouts:
+                    // the first 1.9.0 log took in twenty from his save and no scout ever got to set
+                    // one ("the world has its 6"). It gets five minutes, not twenty.
+                    s_TrapSetAt[t] = Time.time - Mathf.Max(0f, _trapLife.Value * 60f - 300f);
                     s_ArmedOnce.Add(t);        // whatever state it loaded in is the state it keeps
                     Spikes s = t as Spikes;
                     if (s != null && !_spikesHidden.Value) UnmaskSpikes(s);
@@ -612,8 +617,10 @@ namespace GHSmartNatives
                 }
                 if (adopted > 0)
                 {
-                    Logger.LogInfo("traps: " + adopted + " stray native trap(s) from an older save taken in - counted, swept, and never saved again");
+                    s_RoomRemoved = 0;
                     MakeRoomFor(0);
+                    Logger.LogInfo("traps: " + adopted + " stray native trap(s) from an older save taken in - counted, swept (five minutes), never saved again"
+                        + (s_RoomRemoved > 0 ? "; " + s_RoomRemoved + " farthest removed for the cap" : ""));
                 }
             }
             catch (Exception ex) { HuntLog("stray traps: " + ex.Message); }

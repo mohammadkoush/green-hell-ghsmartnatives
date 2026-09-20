@@ -76,6 +76,7 @@ panel too.
 | `Scouts.WatchSeconds` / `WatchRadiusMetres` | 15 / 20 | the watch before a call; the radius it counts in |
 | `Scouts.UnsureSightingsBeforeWave` | 3 | more than this and a wave checks the spot |
 | `Scouts.Silent` / `FiresAreTargets` | on / on | no voice on the walk; a seen fire brings a raid on the base |
+| `Scouts.SmokeSeenMetres` | 40 | how far a scout sees smoke; 0 = its own sight (10 m) |
 | `Hunt.HighGroundAlert` / `HighGroundMetres` | on / 2.5 | above them you are unseen, but they search below |
 | `Tactics.ArcherKeepMetres` | 10 | hunters back off below this and never walk in past it |
 | `Tactics.BossWaitsForSurround` / `BossKeepMetres` | on / 14 | the Thug waits here |

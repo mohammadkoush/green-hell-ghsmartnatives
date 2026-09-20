@@ -157,3 +157,23 @@ like the stealth numbers, so it reaches every kind at once.
 - Open: the through-walls sense too ("everything"), or only eyes and ears ("sight and sound").
   Read as eyes and ears only.
 - Open: a fixed 1 m, or a slider. Read as a slider, default 1.
+
+## 2026-09-20 evening - the first 1.9.0 log
+
+"No one approached the camp, nor a wave came by. Not one single native." The log (1.9.0,
+closed 19:19):
+- Twenty stray traps from the old save were taken in (4, then 14, then 2 as the world streamed
+  in). They filled the cap of six the whole session: no scout ever set a trap ("the world has
+  its 6" never even got logged - the trap log budget went on the removals). 1.9.1: strays get
+  five minutes, removals are one summary line, log budgets raised.
+- Five scouts went out. Four he killed: three "without ever seeing you", one at the end of its
+  watch, on the run - by his rule, no wave from any of them. The watch itself ran as written:
+  spotted at 6 m, crouched, bolted, died at 15 s.
+- Two camp attacks: one at attack 1 (Thug every 2nd), one with a single member. The Thug rule
+  is alive; a second qualifying attack brings one. BossEveryNthAttack = 1 for testing.
+- No fire sighting: no scout came within 10 m of a fire. Smoke now has its own reach (40 m).
+- Read from the IL while here: the game's OWN raids need a firecamp group at full "burning
+  factor" (fires burning long enough; FirecampGroupsManager.m_FirecampGroupsWithFullFactor)
+  and the wave timer at zero, and no predator active; the game keeps ONE camp and ONE roaming
+  group awake at a time, spawned 30-45 m from him wherever he is. So "no one approached the
+  camp" means: no group was spawned near it while he was there, or its scout died first.

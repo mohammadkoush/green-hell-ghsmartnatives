@@ -112,6 +112,7 @@ namespace GHSmartNatives
         private Vector3 _lastPlayerPos;
         private float _movedAt;
         private int _moveKind;               // 0 walk or stand, 1 run, 2 crouched
+        private static int s_MoveLogged;
         private bool _night;
 
         /// <summary>Crouched and not moving for a moment: half the sight.</summary>
@@ -135,8 +136,15 @@ namespace GHSmartNatives
                 if (kind != _moveKind)
                 {
                     _moveKind = kind;
-                    HuntLog("stealth: you " + (kind == 2 ? "crouch" : kind == 1 ? "run" : "walk") + " - sensed through walls within "
-                        + (kind == 2 ? _senseCrouch.Value : kind == 1 ? _senseRun.Value : _senseWalk.Value).ToString("F0") + " m");
+                    // Its own small budget: the first 1.9.0 log spent eleven of the hunt log's
+                    // twenty-four lines on walk/run/crouch.
+                    if (s_MoveLogged < 6)
+                    {
+                        s_MoveLogged++;
+                        Logger.LogInfo("hunt: stealth: you " + (kind == 2 ? "crouch" : kind == 1 ? "run" : "walk") + " - sensed through walls within "
+                            + (kind == 2 ? _senseCrouch.Value : kind == 1 ? _senseRun.Value : _senseWalk.Value).ToString("F0") + " m"
+                            + (s_MoveLogged == 6 ? "  (further move lines suppressed)" : ""));
+                    }
                 }
                 bool night = false;
                 try { MainLevel lvl = MainLevel.Instance; night = lvl != null && lvl.IsNight(); } catch (Exception) { }

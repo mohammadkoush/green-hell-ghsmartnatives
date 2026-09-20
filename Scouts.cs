@@ -42,6 +42,7 @@ namespace GHSmartNatives
         private ConfigEntry<int>   _scoutUnsureMax;
         private ConfigEntry<bool>  _scoutSilent;
         private ConfigEntry<bool>  _scoutFires;
+        private ConfigEntry<float> _smokeRange;
 
         private void BindScoutConfig()
         {
@@ -95,6 +96,12 @@ namespace GHSmartNatives
                 "A lit fire of yours that a scout sees - the fire, or its smoke, within the native's " +
                 "own sight range - is a sure sighting: a wave is sent to the fire and attacks the base. " +
                 "A fire never calls anyone by itself; the scout has to see it.");
+            // His rule was "the maximum distance of a native", with 40 m as his example of that
+            // distance. The game's natives see 10 m, which is no farther than the fire itself - so
+            // the number he pictured is the default, and 0 hands it back to the native's own sight.
+            _smokeRange = Config.Bind("Scouts", "SmokeSeenMetres", 40f,
+                new ConfigDescription("How far a scout sees the smoke of a lit fire (the fire itself: its own " +
+                    "sight range, 10 m). 0 = the same as its sight.", new AcceptableValueRange<float>(0f, 150f)));
             _scoutRetreat = Config.Bind("Scouts", "RetreatSeconds", 25f,
                 new ConfigDescription("How long a scout runs for home before it goes scouting again.",
                     new AcceptableValueRange<float>(5f, 120f)));
@@ -475,6 +482,7 @@ namespace GHSmartNatives
             List<Firecamp> fires = Firecamp.s_Firecamps;
             if (fires == null || fires.Count == 0) return false;
             float range = (m.m_Params != null && m.m_Params.m_SightRange > 0f) ? m.m_Params.m_SightRange : 10f;
+            float smokeRange = (_smokeRange.Value > 0f) ? _smokeRange.Value : range;
             Vector3 eye = m.transform.position + Vector3.up * 1.6f;
             for (int i = 0; i < fires.Count; i++)
             {
@@ -483,9 +491,10 @@ namespace GHSmartNatives
                 float seenAt;
                 if (s_FireSeenAt.TryGetValue(f, out seenAt) && Time.time - seenAt < 600f) continue;
                 Vector3 fp = f.transform.position;
-                if (Vector3.Distance(eye, fp) > range) continue;
-                bool fire = !Physics.Linecast(eye, fp + Vector3.up * 0.6f, ~0, QueryTriggerInteraction.Ignore);
-                bool smoke = !fire && !Physics.Linecast(eye, fp + Vector3.up * 6f, ~0, QueryTriggerInteraction.Ignore);
+                float d = Vector3.Distance(eye, fp);
+                if (d > Mathf.Max(range, smokeRange)) continue;
+                bool fire = d <= range && !Physics.Linecast(eye, fp + Vector3.up * 0.6f, ~0, QueryTriggerInteraction.Ignore);
+                bool smoke = !fire && d <= smokeRange && !Physics.Linecast(eye, fp + Vector3.up * 6f, ~0, QueryTriggerInteraction.Ignore);
                 if (!fire && !smoke) continue;
                 s_FireSeenAt[f] = Time.time;
                 Say("A scout saw your " + (fire ? "fire" : "smoke") + " - they are coming for the camp");

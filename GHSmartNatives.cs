@@ -46,7 +46,7 @@ namespace GHSmartNatives
     {
         public const string Guid    = "com.mohammadkoush.ghsmartnatives";
         public const string Name    = "GHSmartNatives";
-        public const string Version = "1.9.0";
+        public const string Version = "1.9.1";
 
         private static GHSmartNativesPlugin s_Self;
         private Harmony _harmony;
@@ -341,6 +341,7 @@ namespace GHSmartNatives
                 if (Row("Scouts move in silence", ssi) != ssi) _scoutSilent.Value = !ssi;
                 bool sfi = _scoutFires.Value;
                 if (Row("A lit fire or its smoke a scout sees brings a raid on the camp", sfi) != sfi) _scoutFires.Value = !sfi;
+                if (_scoutFires.Value) _smokeRange.Value = Slider("Smoke is seen from (0 = its own sight, 10 m)", _smokeRange.Value, 0f, 150f, " m", 0);
             }
 
             }

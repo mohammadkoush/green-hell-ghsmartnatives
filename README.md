@@ -51,7 +51,7 @@ panel too.
 |---|---|---|
 | `General.OpenKey` | J | the panel |
 | `General.StoryGroupsToo` | off | also touch quest and challenge camps |
-| `Hunt.NoticeRadiusMetres` | 45 | how close you get to a calm camp before they come |
+| `Hunt.NoticeRadiusMetres` | 0 (off) | above 0: any member this close attacks, through hills - a cheat; off: their own eyes, ears and sense |
 | `Hunt.KeepHuntingRadiusMetres` | 80 | they do not calm down while you are inside this |
 | `Hunt.GiveUpAfterSeconds` | 60 | seconds after losing sight of you before a native drops the hunt |
 | `Roam.SearchRadiusMetres` | 60 | how wide the sweep around the last sighting grows |

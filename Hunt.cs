@@ -76,10 +76,16 @@ namespace GHSmartNatives
             // logged below the first time a camp is seen). A camp noticed at activation goes to
             // Attack in the same frame and is never Calm, and everything that lives in Calm -
             // roaming, scouts, the traps as a line you can cross - never runs.
-            _huntRadius = Config.Bind("Hunt", "NoticeRadiusMetresV2", 20f,
-                new ConfigDescription("How close you can get to any member of a calm camp before " +
-                    "they notice you and attack. Keep it well under the distance a camp wakes at " +
-                    "(about 40 m) or the camp is never calm.", new AcceptableValueRange<float>(5f, 200f)));
+            // OFF BY DEFAULT (key renamed again so the cfg takes it). His report, 2026-09-20: "they do
+            // see me on higher elevation - the game is pointing them at me." It was this mod: the
+            // notice is a plain distance in any direction, height included, sight or no sight. With
+            // it off the natives find him the game's own way - eyes, 10 m in a cone with a clear
+            // line; ears, by what he does; sense, 7 m - which is what the roaming and the scouts
+            // were built for. The slider stays for anyone who wants the old cheat.
+            _huntRadius = Config.Bind("Hunt", "NoticeRadiusMetresV3", 0f,
+                new ConfigDescription("0 = off: natives find you only by their own eyes, ears and sense. " +
+                    "Above 0: any member of a calm camp within this distance, in any direction, " +
+                    "attacks - a cheat, and it sees through hills.", new AcceptableValueRange<float>(0f, 200f)));
             _keepRadius = Config.Bind("Hunt", "KeepHuntingRadiusMetres", 80f,
                 new ConfigDescription("While you are within this distance of any member, a hunting " +
                     "group does not calm down and anyone who lost you is pointed at you again.",
@@ -138,6 +144,7 @@ namespace GHSmartNatives
                     if (__instance.m_State == AIs.HumanAIGroup.State.Attack) return;
                     if (__instance.m_Members == null || __instance.m_Members.Count == 0) return;
 
+                    if (s_Self._huntRadius.Value <= 0f) return;                 // off: their own senses only
                     Being p = HuntTarget();
                     if (p == null) return;
                     float d = ClosestMember(__instance, p.transform.position, true);

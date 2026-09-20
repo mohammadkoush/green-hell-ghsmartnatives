@@ -46,7 +46,7 @@ namespace GHSmartNatives
     {
         public const string Guid    = "com.mohammadkoush.ghsmartnatives";
         public const string Name    = "GHSmartNatives";
-        public const string Version = "1.6.1";
+        public const string Version = "1.6.2";
 
         private static GHSmartNativesPlugin s_Self;
         private Harmony _harmony;
@@ -262,7 +262,7 @@ namespace GHSmartNatives
             if (Row("Natives hunt you when you come near", hunt) != hunt) _huntEnabled.Value = !hunt;
             if (_huntEnabled.Value)
             {
-                _huntRadius.Value  = Slider("They notice you within", _huntRadius.Value, 5f, 200f, " m", 0);
+                _huntRadius.Value  = Slider("They notice you within (0 = only by eyes, ears and sense)", _huntRadius.Value, 0f, 200f, " m", 0);
                 _keepRadius.Value  = Slider("They keep hunting within", _keepRadius.Value, 10f, 300f, " m", 0);
                 _giveUpSecs.Value  = Slider("Give up after losing you for", _giveUpSecs.Value, 5f, 600f, " s", 0);
             }

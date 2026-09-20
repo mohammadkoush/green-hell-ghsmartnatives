@@ -141,6 +141,8 @@ out before they arrive). My proposal, not decided: no timer at all. The wave is 
 the scout sees the fire; from then on they come to the spot whether it burns or not, and the
 game's own wave logic decides how long they stay. A fire that dies after being seen has already
 been seen.
+Confirmed with him: a fire he puts out before any scout saw it calls nothing - no scout, no
+wave. Only a LIT fire (or its smoke) in a scout's sight counts; a cold fire pit is scenery.
 
 **Thugs, again: "still no thugs in any wave."** Said 2026-09-20 with the game closed; the only
 log on disk is still the 1.7.2 one (14:34), which also has no "numbers: wave" line at all - the

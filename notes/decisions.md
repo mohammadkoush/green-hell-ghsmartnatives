@@ -50,8 +50,11 @@ it crouches where it is. Read as:
 **Thugs: "not joining the waves for sure."**
 Reported 2026-09-20 after a session that ran 1.7.2 (the log's load line). The camp-attack Thug
 fix (BossCampMinMembers, 1.7.3) was built during that session and first deployed today inside
-1.8.0, so it has not been played yet. Nothing to change until a 1.8.0 log is read: look for
-"numbers: camp attack ... Thug" lines and their skip reasons.
+1.8.0, so it has not been played yet. His follow-up: "Check your logs, as it is still the same."
+Checked again (log closed 14:34, header line says 1.7.2): the camps that attacked had rolled 2
+and 3, and 1.7.2 returned silently below four members - no camp-attack line could exist. The
+1.7.3 rule (floor of two, every second attack, reason logged when skipped) is in 1.8.0, untested.
+If a 1.8.0 log still has no "numbers: camp ... attacks" line, the fault is upstream of the count.
 
 **Sense through walls, by what he is doing.**
 His words: "Natives sense me two metres from behind walls. That's it. And especially if I'm

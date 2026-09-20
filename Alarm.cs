@@ -394,7 +394,7 @@ namespace GHSmartNatives
                 {
                     AIs.HumanAIGroup g;
                     if (!s_Traps.TryGetValue(__instance, out g)) return;
-                    if (obj == null || (!GameObjectExtension.IsPlayer(obj) && obj.GetComponent<Player>() == null)) return;
+                    if (obj == null || (!GameObjectExtension.IsPlayer(obj) && obj.GetComponentInParent<Player>() == null)) return;
                     s_TripHandled = true;
                     float last;
                     if (s_TrippedAt.TryGetValue(__instance, out last) && Time.time - last < 20f && Time.time - last > 0.5f) return;
@@ -435,7 +435,18 @@ namespace GHSmartNatives
                 if (t == null) continue;
                 float last;
                 if (s_TrippedAt.TryGetValue(t, out last) && Time.time - last < 20f) continue;
-                if (Vector3.Distance(t.transform.position, p.transform.position) > _trapTrip.Value) continue;
+                // HIS TEST: stood on the spikes, no trip. The spikes' area is a box wider than the
+                // 1.2 m from its centre; the box itself (m_DamageCollider, expanded a little) is
+                // the measure now, the radius only for a trap without one.
+                bool inside;
+                Spikes spk = t as Spikes;
+                if (spk != null && spk.m_DamageCollider != null)
+                {
+                    Bounds b = spk.m_DamageCollider.bounds; b.Expand(new Vector3(0.6f, 1.5f, 0.6f));
+                    inside = b.Contains(p.transform.position);
+                }
+                else inside = Vector3.Distance(t.transform.position, p.transform.position) <= _trapTrip.Value;
+                if (!inside) continue;
                 s_TrippedAt[t] = Time.time;
                 // HIS RULE: "do the trigger trap - work your way around it to find a way to it being
                 // triggered." So the game's own entry is called with the player, exactly what its
@@ -462,15 +473,18 @@ namespace GHSmartNatives
                 try
                 {
                     Item bt = __instance.GetComponentInParent<Item>();
-                    if (bt == null || !s_Traps.ContainsKey(bt) || s_TrapLogged >= 8) return;
-                    s_TrapLogged++;
-                    s_Self.Logger.LogInfo("traps: trigger entered by '" + (other != null ? other.gameObject.name : "?") + "' player="
-                        + (other != null && GameObjectExtension.IsPlayer(other.gameObject)));
+                    if (bt == null || !s_Traps.ContainsKey(bt) || other == null || s_TrigLogged >= 12) return;
+                    string n = other.gameObject.name;
+                    if (n.StartsWith("Sensor") || n.StartsWith("Anthill")) return;     // scene volumes, not him
+                    s_TrigLogged++;
+                    s_Self.Logger.LogInfo("traps: trigger entered by '" + n + "' player=" + GameObjectExtension.IsPlayer(other.gameObject)
+                        + " playerAbove=" + (other.GetComponentInParent<Player>() != null));
                 }
                 catch (Exception) { }
             }
         }
 
+        private static int s_TrigLogged;
         private float _trapSweepAt;
 
         /// <summary>Called from Update: traps far behind him go, whoever's camp they were.</summary>

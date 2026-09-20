@@ -21,8 +21,8 @@ each on its own switch, all through the game's own AI:
 - **Tactics.** Archers (hunters) hold their distance and throw while the others close in; the Thug
   waits at a distance until you are surrounded, a member is lost, or a timer runs out — then comes.
 - **Alarm.** A camp that starts hunting calls every calm camp within range into it. Each camp wakes
-  with a ring of the tribes' own bow traps around it; stepping on one is a call to arms, arrow or
-  no arrow (with arrows by default, so they shoot like the game's).
+  with a ring of the tribes' own spike traps around it (bow traps by choice); stepping on one hurts,
+  and sends a scout to look.
 - **Numbers.** Camp groups, patrols and waves spawn a random number between a floor and a ceiling
   (default 2 to 5) instead of the game's slow ramp. A wave of 4 or more always brings one Thug.
 
@@ -63,7 +63,9 @@ panel too.
 | `Tactics.SurroundedCount` / `BossWaitMaxSeconds` | 2 / 45 | what releases the Thug |
 | `Alarm.CampsCallEachOther` / `CallRadiusMetres` | on / 120 | a call to arms carries this far |
 | `Alarm.TrapsAroundCamp` / `TrapsPerCamp` / `TrapRingMetres` | on / 3 / 18 | the ring of bow traps |
-| `Alarm.TrapsHaveArrows` | on | off: the traps only ring the alarm |
+| `Alarm.TrapKind` | Spikes | the tribes' spike trap (no arrow) or their bow trap |
+| `Alarm.SpikesHiddenUnderLeaves` | off | the game hides its spikes; here they show, so they can be avoided |
+| `Alarm.TrapsHaveArrows` | on | the traps are armed (bow traps shoot); off: alarm only |
 | `Alarm.MaxTraps` | 6 | never more in the world; the farthest from you go first to make room |
 | `Alarm.TrapLifeMinutes` | 20 | a trap vanishes on its own after this |
 | `Alarm.TrapTripMetres` | 1.2 | standing this close fires the trap through the game's own trigger |

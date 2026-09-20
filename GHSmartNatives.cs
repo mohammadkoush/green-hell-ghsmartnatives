@@ -46,7 +46,7 @@ namespace GHSmartNatives
     {
         public const string Guid    = "com.mohammadkoush.ghsmartnatives";
         public const string Name    = "GHSmartNatives";
-        public const string Version = "1.4.1";
+        public const string Version = "1.5.0";
 
         private static GHSmartNativesPlugin s_Self;
         private Harmony _harmony;
@@ -330,8 +330,12 @@ namespace GHSmartNatives
                 _trapRearm.Value = Slider("Unarmed traps are armed again every", _trapRearm.Value, 2f, 120f, " s", 0);
                 _trapsForget.Value = Slider("A trap this far behind you is removed", _trapsForget.Value, 30f, 500f, " m", 0);
                 _trapRing.Value = Slider("The ring sits at", _trapRing.Value, 6f, 40f, " m", 0);
+                bool sk = _trapKind.Value != "Bow";
+                if (Row("Spike traps (no arrow); off = bow traps", sk) != sk) _trapKind.Value = sk ? "Bow" : "Spikes";
+                bool sh = _spikesHidden.Value;
+                if (Row("Spikes hidden under leaves, as the game hides them", sh) != sh) _spikesHidden.Value = !sh;
                 bool arr = _trapsArmed.Value;
-                if (Row("The traps carry arrows and shoot", arr) != arr) _trapsArmed.Value = !arr;
+                if (Row("The traps are armed (bow traps carry arrows and shoot)", arr) != arr) _trapsArmed.Value = !arr;
             }
 
             GUILayout.Space(8f);

@@ -40,6 +40,8 @@ namespace GHSmartNatives
         private ConfigEntry<float> _trapsForget;
         private ConfigEntry<float> _trapTrip;
         private ConfigEntry<float> _trapRearm;
+        private ConfigEntry<string> _trapKind;
+        private ConfigEntry<bool>  _spikesHidden;
         private ConfigEntry<int>   _trapsMax;
         private ConfigEntry<bool>  _tripScout;
         private ConfigEntry<float> _trapLife;
@@ -64,6 +66,12 @@ namespace GHSmartNatives
                 new ConfigDescription("A camp's traps stay after the camp is wiped or asleep, until you are " +
                     "this far from them. His test: 'I thought I saw a trap, but I could not find it after " +
                     "the fight' - they used to go with the camp.", new AcceptableValueRange<float>(30f, 500f)));
+            _trapKind = Config.Bind("Alarm", "TrapKind", "Spikes",
+                new ConfigDescription("Which of the tribes' traps the ring is made of: Spikes (no arrow, his " +
+                    "choice) or Bow.", new AcceptableValueList<string>("Spikes", "Bow")));
+            _spikesHidden = Config.Bind("Alarm", "SpikesHiddenUnderLeaves", false,
+                "The game hides its spike traps under leaves. Off (his rule): a trap he can see is a " +
+                "trap he can avoid.");
             _trapRearm = Config.Bind("Alarm", "RearmSeconds", 10f,
                 new ConfigDescription("How often native traps are checked and, if unarmed, armed again.",
                     new AcceptableValueRange<float>(2f, 120f)));
@@ -164,8 +172,37 @@ namespace GHSmartNatives
         // Traps
         // -----------------------------------------------------------------------------------------
 
-        private static readonly Dictionary<BowTrap, AIs.HumanAIGroup> s_Traps = new Dictionary<BowTrap, AIs.HumanAIGroup>();
-        private static readonly Dictionary<BowTrap, float> s_TrapSetAt = new Dictionary<BowTrap, float>();
+        // THE TRAP IS AN ITEM: the tribes' spike trap (Spikes, his choice - no arrow for Pickup
+        // Doctor to want) or their bow trap (BowTrap). Both are ITrapTriggerOwners with a public
+        // OnEnterTrigger(GameObject), a private m_Armed and a private Arm(bool).
+        private static readonly Dictionary<Item, AIs.HumanAIGroup> s_Traps = new Dictionary<Item, AIs.HumanAIGroup>();
+        private static readonly Dictionary<Item, float> s_TrapSetAt = new Dictionary<Item, float>();
+
+        private static bool IsSpikes(Item t) { return t is Spikes; }
+
+        private static bool TrapArmed(Item t)
+        {
+            try { return Traverse.Create(t).Field("m_Armed").GetValue<bool>(); } catch (Exception) { return false; }
+        }
+
+        private static void TrapEnter(Item t, GameObject who)
+        {
+            Spikes sp = t as Spikes;
+            if (sp != null) { sp.OnEnterTrigger(who); return; }
+            BowTrap bt = t as BowTrap;
+            if (bt != null) bt.OnEnterTrigger(who);
+        }
+
+        /// <summary>Spikes hide under leaves by design (m_Mask). His rule: a trap he can see is a trap he can avoid.</summary>
+        private void UnmaskSpikes(Spikes sp)
+        {
+            try
+            {
+                if (sp.m_MaskObjects != null) for (int i = 0; i < sp.m_MaskObjects.Count; i++) if (sp.m_MaskObjects[i] != null) sp.m_MaskObjects[i].SetActive(false);
+                Traverse.Create(sp).Field("m_Mask").SetValue(false);
+            }
+            catch (Exception) { }
+        }
 
         /// <summary>Room for n more: the farthest from him go first, because a trap he never met was set in the wrong place.</summary>
         private void MakeRoomFor(int n)
@@ -175,8 +212,8 @@ namespace GHSmartNatives
             int max = Mathf.Max(1, _trapsMax.Value);
             while (s_Traps.Count > 0 && s_Traps.Count + n > max)
             {
-                BowTrap far = null; float farD = -1f;
-                foreach (KeyValuePair<BowTrap, AIs.HumanAIGroup> kv in s_Traps)
+                Item far = null; float farD = -1f;
+                foreach (KeyValuePair<Item, AIs.HumanAIGroup> kv in s_Traps)
                 {
                     if (kv.Key == null) { far = kv.Key; break; }
                     float d = Vector3.Distance(kv.Key.transform.position, p.transform.position);
@@ -187,7 +224,7 @@ namespace GHSmartNatives
             }
         }
 
-        private void DropTrap(BowTrap t, string why)
+        private void DropTrap(Item t, string why)
         {
             try { if (t != null) UnityEngine.Object.Destroy(t.gameObject); } catch (Exception) { }
             s_Traps.Remove(t); s_TrapSetAt.Remove(t); s_TrippedAt.Remove(t);
@@ -232,27 +269,28 @@ namespace GHSmartNatives
                 Vector3 at = centre + dir * _trapRing.Value;
                 NavMeshHit hit;
                 if (!NavMesh.SamplePosition(at, out hit, 6f, NavMesh.AllAreas)) continue;
-                // Facing outward: the arrow flies at whoever walks in from outside the ring.
-                Item item = im.CreateItem(Enums.ItemID.Tribe_Bow_Trap, false, hit.position, Quaternion.LookRotation(dir, Vector3.up), false);
+                // Facing outward (a bow trap's arrow flies at whoever walks in from outside the ring).
+                bool spikes = _trapKind.Value != "Bow";
+                Item item = im.CreateItem(spikes ? Enums.ItemID.tribe_spike_trap : Enums.ItemID.Tribe_Bow_Trap, false, hit.position, Quaternion.LookRotation(dir, Vector3.up), false);
                 if (item == null) continue;
-                BowTrap bt = item as BowTrap;
-                if (bt == null) bt = item.GetComponent<BowTrap>();
-                if (bt == null)
+                bool ok = spikes ? (item is Spikes || item.GetComponent<Spikes>() != null) : (item is BowTrap || item.GetComponent<BowTrap>() != null);
+                if (!ok)
                 {
-                    HuntLog("Tribe_Bow_Trap created but carries no BowTrap component (" + item.GetType().Name + ") - removed");
+                    HuntLog((spikes ? "tribe_spike_trap" : "Tribe_Bow_Trap") + " created but carries no trap component (" + item.GetType().Name + ") - removed");
                     UnityEngine.Object.Destroy(item.gameObject);
                     continue;
                 }
-                s_Traps[bt] = g;
-                s_TrapSetAt[bt] = Time.time;
+                s_Traps[item] = g;
+                s_TrapSetAt[item] = Time.time;
                 placed++;
-                if (_trapsArmed.Value) ArmTrap(bt, im, hit.position);      // and the re-arm tick looks again in a few seconds
+                if (spikes && !_spikesHidden.Value) UnmaskSpikes(item as Spikes ?? item.GetComponent<Spikes>());
+                if (_trapsArmed.Value) ArmTrap(item, im, hit.position);    // and the re-arm tick looks again in a few seconds
             }
             if (placed > 0 && s_TrapLogged < 8)
             {
                 s_TrapLogged++;
                 Logger.LogInfo("traps: " + placed + " of " + want + " set around '" + g.name + "' at " + Mathf.RoundToInt(_trapRing.Value)
-                    + " m (centre from " + n + " spawn point(s))" + (_trapsArmed.Value ? ", with arrows" : ", alarm only"));
+                    + " m (centre from " + n + " spawn point(s)), " + (_trapKind.Value != "Bow" ? "spikes" : "bow traps") + (_trapsArmed.Value ? ", armed" : ", alarm only"));
             }
         }
 
@@ -263,11 +301,19 @@ namespace GHSmartNatives
         // half a metre above the trap as a loose item - which is why "every trap placed by the
         // natives does not get armed": a loose Tribe_Arrow is on his pickup list, and Pickup
         // Doctor took it. In the slot it is nobody's to take.
-        private bool ArmTrap(BowTrap bt, ItemsManager im, Vector3 at)
+        private bool ArmTrap(Item t, ItemsManager im, Vector3 at)
         {
             try
             {
-                Traverse tr = Traverse.Create(bt);
+                Traverse tr = Traverse.Create(t);
+                if (t is Spikes)
+                {
+                    // Spikes: no arrow. Arm(false) sets the armed body and m_Armed.
+                    tr.Method("Arm", new Type[] { typeof(bool) }).GetValue(false);
+                    if (!_spikesHidden.Value) UnmaskSpikes((Spikes)t);
+                    return tr.Field("m_Armed").GetValue<bool>();
+                }
+                BowTrap bt = (BowTrap)t;
                 ItemSlot slot = tr.Field("m_ArrowSlot").GetValue<ItemSlot>();
                 Item arrow = tr.Field("m_Arrow").GetValue<Item>();
                 if (arrow == null)
@@ -301,15 +347,13 @@ namespace GHSmartNatives
             ItemsManager im = ItemsManager.Get();
             if (im == null) return;
             int armed = 0, fixedUp = 0;
-            foreach (KeyValuePair<BowTrap, AIs.HumanAIGroup> kv in s_Traps)
+            foreach (KeyValuePair<Item, AIs.HumanAIGroup> kv in s_Traps)
             {
-                BowTrap t = kv.Key;
+                Item t = kv.Key;
                 if (t == null) continue;
                 float setAt;
                 if (s_TrapSetAt.TryGetValue(t, out setAt) && Time.time - setAt < 3f) continue;
-                bool isArmed = false;
-                try { isArmed = Traverse.Create(t).Field("m_Armed").GetValue<bool>(); } catch (Exception) { }
-                if (isArmed) { armed++; continue; }
+                if (TrapArmed(t)) { armed++; continue; }
                 if (!_trapsArmed.Value) continue;
                 if (ArmTrap(t, im, t.transform.position)) fixedUp++;
             }
@@ -323,7 +367,17 @@ namespace GHSmartNatives
         [HarmonyPatch(typeof(BowTrap), "OnEnterTrigger")]
         private static class Patch_TrapTripped
         {
-            private static void Prefix(BowTrap __instance, GameObject obj)
+            private static void Prefix(BowTrap __instance, GameObject obj) { Tripped(__instance, obj); }
+        }
+
+        [HarmonyPatch(typeof(Spikes), "OnEnterTrigger")]
+        private static class Patch_SpikesTripped
+        {
+            private static void Prefix(Spikes __instance, GameObject obj) { Tripped(__instance, obj); }
+        }
+
+        private static void Tripped(Item __instance, GameObject obj)
+        {
             {
                 if (s_Self == null) return;
                 try
@@ -347,7 +401,7 @@ namespace GHSmartNatives
         // for it: standing within TrapTripMetres of a native trap trips it. The arrow, if any, is
         // still the game's to shoot through its own trigger.
         /// <summary>What a trip brings: a scout to look (his rule), or, with no calm camp to send one, the alarm.</summary>
-        private void TripResponse(AIs.HumanAIGroup g, BowTrap trap, Vector3 at, string why)
+        private void TripResponse(AIs.HumanAIGroup g, Item trap, Vector3 at, string why)
         {
             if (_tripScout.Value && TripSendsScout(g, trap, at)) return;
             Say("You tripped a native trap - the camp is alarmed");
@@ -356,7 +410,7 @@ namespace GHSmartNatives
         }
 
         private float _trapTripAt;
-        private static readonly Dictionary<BowTrap, float> s_TrippedAt = new Dictionary<BowTrap, float>();
+        private static readonly Dictionary<Item, float> s_TrippedAt = new Dictionary<Item, float>();
         private static bool s_TripHandled;
 
         private void TrapTripByDistance()
@@ -365,9 +419,9 @@ namespace GHSmartNatives
             _trapTripAt = Time.time;
             Player p = Player.Get();
             if (p == null) return;
-            foreach (KeyValuePair<BowTrap, AIs.HumanAIGroup> kv in s_Traps)
+            foreach (KeyValuePair<Item, AIs.HumanAIGroup> kv in s_Traps)
             {
-                BowTrap t = kv.Key;
+                Item t = kv.Key;
                 if (t == null) continue;
                 float last;
                 if (s_TrippedAt.TryGetValue(t, out last) && Time.time - last < 20f) continue;
@@ -378,7 +432,7 @@ namespace GHSmartNatives
                 // TrapTrigger would pass: BowTrap.OnEnterTrigger -> Shot -> the animator, the arrow
                 // slot, the sound, the hit. The alarm prefix below sees that call like any other.
                 bool fired = false;
-                try { t.OnEnterTrigger(p.gameObject); fired = true; }
+                try { TrapEnter(t, p.gameObject); fired = true; }
                 catch (Exception ex) { HuntLog("trap fire failed: " + ex.Message); }
                 if (!s_TripHandled)
                 {
@@ -397,7 +451,7 @@ namespace GHSmartNatives
             {
                 try
                 {
-                    BowTrap bt = __instance.GetComponentInParent<BowTrap>();
+                    Item bt = __instance.GetComponentInParent<Item>();
                     if (bt == null || !s_Traps.ContainsKey(bt) || s_TrapLogged >= 8) return;
                     s_TrapLogged++;
                     s_Self.Logger.LogInfo("traps: trigger entered by '" + (other != null ? other.gameObject.name : "?") + "' player="
@@ -416,8 +470,8 @@ namespace GHSmartNatives
             _trapSweepAt = Time.time;
             Player p = Player.Get();
             if (p == null) return;
-            List<BowTrap> gone = new List<BowTrap>(); List<string> why = new List<string>();
-            foreach (KeyValuePair<BowTrap, AIs.HumanAIGroup> kv in s_Traps)
+            List<Item> gone = new List<Item>(); List<string> why = new List<string>();
+            foreach (KeyValuePair<Item, AIs.HumanAIGroup> kv in s_Traps)
             {
                 if (kv.Key == null) { gone.Add(kv.Key); why.Add("gone from the world"); continue; }
                 float setAt;
@@ -444,6 +498,17 @@ namespace GHSmartNatives
             }
         }
 
+        [HarmonyPatch(typeof(Spikes), "CanTrigger")]
+        private static class Patch_NativeSpikesCannotBeHandled
+        {
+            private static bool Prefix(Spikes __instance, ref bool __result)
+            {
+                if (!s_Traps.ContainsKey(__instance)) return true;
+                __result = false;
+                return false;
+            }
+        }
+
         [HarmonyPatch(typeof(BowTrap), "GetActions")]
         private static class Patch_NativeTrapOffersNothing
         {
@@ -455,10 +520,21 @@ namespace GHSmartNatives
             }
         }
 
+        [HarmonyPatch(typeof(Spikes), "GetActions")]
+        private static class Patch_NativeSpikesOfferNothing
+        {
+            private static bool Prefix(Spikes __instance, List<TriggerAction.TYPE> actions)
+            {
+                if (!s_Traps.ContainsKey(__instance)) return true;
+                if (actions != null) actions.Clear();
+                return false;
+            }
+        }
+
         private void RemoveTraps(AIs.HumanAIGroup g)
         {
-            List<BowTrap> gone = new List<BowTrap>();
-            foreach (KeyValuePair<BowTrap, AIs.HumanAIGroup> kv in s_Traps)
+            List<Item> gone = new List<Item>();
+            foreach (KeyValuePair<Item, AIs.HumanAIGroup> kv in s_Traps)
                 if (kv.Key == null || g == null || kv.Value == g) gone.Add(kv.Key);
             for (int i = 0; i < gone.Count; i++)
             {

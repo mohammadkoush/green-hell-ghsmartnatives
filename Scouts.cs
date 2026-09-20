@@ -68,7 +68,7 @@ namespace GHSmartNatives
         private class ScoutState
         {
             public float Heading; public float RetreatUntil; public float FoundAt;
-            public BowTrap Errand;          // a trap to walk to and reset - his rule, see TripSendsScout
+            public Item Errand;             // a trap to walk to and reset - his rule, see TripSendsScout
             public Vector3 ErrandAt; public float ErrandSince;
         }
 
@@ -78,7 +78,7 @@ namespace GHSmartNatives
         // avoid being spotted." So the trip is an errand for the camp's scout (one is assigned if
         // none is out): walk to the trap, re-arm it, go back to scouting. The scout's own eyes and
         // ears on the way are the same as ever - a sighting means home at a run and a wave.
-        internal bool TripSendsScout(AIs.HumanAIGroup g, BowTrap trap, Vector3 at)
+        internal bool TripSendsScout(AIs.HumanAIGroup g, Item trap, Vector3 at)
         {
             if (!_scoutsEnabled.Value || g == null || !g.m_Active || g.m_Members == null) return false;
             if (g.m_State != AIs.HumanAIGroup.State.Calm) return false;      // already up in arms: the alarm as before
@@ -107,7 +107,7 @@ namespace GHSmartNatives
 
         private void FinishErrand(AIs.HumanAI m, ScoutState sc)
         {
-            BowTrap t = sc.Errand;
+            Item t = sc.Errand;
             sc.Errand = null;
             if (t == null) return;
             try

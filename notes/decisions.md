@@ -109,6 +109,27 @@ when an eye actually lands on him.
 - Open: how long the alert lasts after he goes quiet - read as the search's ForgetSeconds.
 - Open: does a trap tripped from above count the same.
 
+**The campfire is a target, found by sight or by smoke.**
+His words (dictated; "Can't fire" = campfire, "sawed afire" = saw a fire): "Can we treat
+campfire like players? But instead of attacking the player, they go to the campfire to reach it,
+and attack the base. Campfire can't be triggering scouts. A scout must randomly see a fire, or
+the smoke from a fire." Read as:
+- A LIT fire of his is a thing a scout can find - by seeing the fire itself (its own sight, the
+  fire within its sight range and in view), or by seeing the smoke, which shows from farther
+  (open how far; a smoke column is seen well beyond 10 m - read as a wider radius, its own
+  slider, line of sight to the column's top).
+- No trigger by distance, no "the fire calls them": the scout has to be walking where it can
+  see it. Random in the sense of the scout's own wandering.
+- Found: the same watch and wave as for the player, but the wave's target is the FIRE: they
+  walk to it and attack the base - the game's own construction damage (Construction.TakeDamage,
+  CanBeDestroyedByAI; the AI has this for tribal raids). The player is attacked if met.
+- Open: does the scout count the watch on a fire too, or is a fire a sure sighting at once.
+  Read as: at once - a fire does not run away.
+- Open: which constructions they hit - the fire only, or everything near it. Read as: anything
+  of his within reach of the fire that the game lets AI destroy.
+- Open: a fire that goes out before they arrive - do they still come. Read as: yes, to the spot.
+- Earlier offer from my side (a scout visiting his firecamp, "smoke") - this is his version of it.
+
 **Thugs, again: "still no thugs in any wave."** Said 2026-09-20 with the game closed; the only
 log on disk is still the 1.7.2 one (14:34), which also has no "numbers: wave" line at all - the
 game spawned no wave that session; what he calls waves are camp attacks. Stands as above: the

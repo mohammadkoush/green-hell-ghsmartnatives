@@ -32,5 +32,17 @@ Understanding so far (not yet confirmed by him):
 - The 15 seconds are a setting on the Scouts tab. His words: "Let's make it a slider from 0 to
   15 seconds." Range 0 to 15; 0 = the call is instant, as today. Default open - 15 is what he
   named first.
-- Open: does the scout back off to keep watching from ScoutKeep distance, or freeze in place?
 - Open: is the count continuous (broken line of sight starts over) or accumulated?
+
+**The scout moves in silence, and watches crouched.**
+His words: "Scout moving around, always in silence. Crouches for 15 seconds, as long as the
+player is within 20 meters and the scout saw the player." This answers "back off or freeze":
+it crouches where it is. Read as:
+- A scout makes no sound on its walk - no calls, no chatter, no footstep noise the game plays
+  for natives (open which of these the game actually has for a HumanAI).
+- When it has seen him and he is within 20 m, it drops to a crouch and holds there, watching,
+  for the slider's seconds (0 to 15). Then home at a run and the wave.
+- The watch holds only while both are true: he is within 20 m AND the scout saw him. Him
+  walking out past 20 m, or out of its sight, ends the watch. Open whether that resets the
+  count or pauses it (the open question above, still open).
+- 20 m is a number; open whether it is its own slider or the existing ScoutKeep (20 m today).

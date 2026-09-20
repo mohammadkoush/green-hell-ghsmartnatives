@@ -39,6 +39,7 @@ namespace GHSmartNatives
         private ConfigEntry<bool>  _trapsArmed;
         private ConfigEntry<float> _trapsForget;
         private ConfigEntry<float> _trapTrip;
+        private ConfigEntry<float> _trapRearm;
         private ConfigEntry<int>   _trapsMax;
         private ConfigEntry<bool>  _tripScout;
         private ConfigEntry<float> _trapLife;
@@ -63,6 +64,9 @@ namespace GHSmartNatives
                 new ConfigDescription("A camp's traps stay after the camp is wiped or asleep, until you are " +
                     "this far from them. His test: 'I thought I saw a trap, but I could not find it after " +
                     "the fight' - they used to go with the camp.", new AcceptableValueRange<float>(30f, 500f)));
+            _trapRearm = Config.Bind("Alarm", "RearmSeconds", 10f,
+                new ConfigDescription("How often native traps are checked and, if unarmed, armed again.",
+                    new AcceptableValueRange<float>(2f, 120f)));
             _trapTrip = Config.Bind("Alarm", "TrapTripMetres", 1.2f,
                 new ConfigDescription("Standing this close to a native trap trips it, whether or not the " +
                     "game's own trigger fires.", new AcceptableValueRange<float>(0.5f, 4f)));
@@ -242,7 +246,7 @@ namespace GHSmartNatives
                 s_Traps[bt] = g;
                 s_TrapSetAt[bt] = Time.time;
                 placed++;
-                if (_trapsArmed.Value) ArmTrap(bt, im, hit.position);
+                if (_trapsArmed.Value) ArmTrap(bt, im, hit.position);      // and the re-arm tick looks again in a few seconds
             }
             if (placed > 0 && s_TrapLogged < 8)
             {
@@ -253,19 +257,66 @@ namespace GHSmartNatives
         }
 
         private static bool s_ArmFailedSaid;
-        private void ArmTrap(BowTrap bt, ItemsManager im, Vector3 at)
+        // THE WAY THE GAME ARMS ONE (BowTrap's IL): the arrow goes INTO the trap's arrow slot
+        // (ItemSlot.InsertItem -> OnInsertItem -> SetArrow: parented, positioned, collisions
+        // ignored), then Arm(). The first build only called SetArrow and left the arrow lying
+        // half a metre above the trap as a loose item - which is why "every trap placed by the
+        // natives does not get armed": a loose Tribe_Arrow is on his pickup list, and Pickup
+        // Doctor took it. In the slot it is nobody's to take.
+        private bool ArmTrap(BowTrap bt, ItemsManager im, Vector3 at)
         {
             try
             {
-                Item arrow = im.CreateItem(Enums.ItemID.Tribe_Arrow, false, at + Vector3.up * 0.5f, Quaternion.identity, false);
-                if (arrow == null) { if (!s_ArmFailedSaid) { s_ArmFailedSaid = true; HuntLog("traps: no Tribe_Arrow could be made - traps ring the alarm only"); } return; }
                 Traverse tr = Traverse.Create(bt);
-                tr.Method("SetArrow", new Type[] { typeof(Item) }).GetValue(arrow);
+                ItemSlot slot = tr.Field("m_ArrowSlot").GetValue<ItemSlot>();
+                Item arrow = tr.Field("m_Arrow").GetValue<Item>();
+                if (arrow == null)
+                {
+                    arrow = im.CreateItem(Enums.ItemID.Tribe_Arrow, false, at + Vector3.up * 0.5f, Quaternion.identity, false);
+                    if (arrow == null) { if (!s_ArmFailedSaid) { s_ArmFailedSaid = true; HuntLog("traps: no Tribe_Arrow could be made - traps ring the alarm only"); } return false; }
+                    if (slot != null) slot.InsertItem(arrow);
+                    else tr.Method("SetArrow", new Type[] { typeof(Item) }).GetValue(arrow);
+                }
                 tr.Method("Arm", new Type[] { typeof(bool) }).GetValue(false);
+                return tr.Field("m_Armed").GetValue<bool>();
             }
             catch (Exception ex)
             {
                 if (!s_ArmFailedSaid) { s_ArmFailedSaid = true; HuntLog("traps: arming failed (" + ex.Message + ") - traps ring the alarm only"); }
+                return false;
+            }
+        }
+
+        // HIS RULE: "add a timer where the traps get reset - every trap placed by the natives does
+        // not get armed; give the trap time to re-arm." Every RearmSeconds each native trap is
+        // looked at; one that is not armed is armed again, the arrow made afresh if it is gone.
+        // The first look is a few seconds after placement, after the game's own Start has run.
+        private float _rearmAt;
+        private static int s_RearmLogged;
+
+        private void TrapRearmTick()
+        {
+            if (Time.time - _rearmAt < _trapRearm.Value || s_Traps.Count == 0) return;
+            _rearmAt = Time.time;
+            ItemsManager im = ItemsManager.Get();
+            if (im == null) return;
+            int armed = 0, fixedUp = 0;
+            foreach (KeyValuePair<BowTrap, AIs.HumanAIGroup> kv in s_Traps)
+            {
+                BowTrap t = kv.Key;
+                if (t == null) continue;
+                float setAt;
+                if (s_TrapSetAt.TryGetValue(t, out setAt) && Time.time - setAt < 3f) continue;
+                bool isArmed = false;
+                try { isArmed = Traverse.Create(t).Field("m_Armed").GetValue<bool>(); } catch (Exception) { }
+                if (isArmed) { armed++; continue; }
+                if (!_trapsArmed.Value) continue;
+                if (ArmTrap(t, im, t.transform.position)) fixedUp++;
+            }
+            if (fixedUp > 0 && s_RearmLogged < 10)
+            {
+                s_RearmLogged++;
+                Logger.LogInfo("traps: " + fixedUp + " re-armed (" + armed + " were already armed)");
             }
         }
 

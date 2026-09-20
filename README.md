@@ -31,7 +31,7 @@ each on its own switch, all through the game's own AI:
 - **Alarm.** A camp that starts hunting calls every calm camp within range into it. Scouts set the
   tribes' own spike traps where they walk (bow traps by choice), one at a time up to a cap, never
   near anything you built; stepping on one hurts and brings a scout to reset it. A native trap
-  cannot be taken, disarmed or hacked down - only avoided. Traps are never written into the save;
+  cannot be taken or disarmed by hand; it can be broken like any construction. Traps are never written into the save;
   any left in a save by an older version are taken in on load and fall under the same cap and sweep.
 - **Numbers.** Camp groups, patrols and waves spawn a random number between a floor and a ceiling
   (default 2 to 5) instead of the game's slow ramp. A wave of 4 or more always brings one Thug.

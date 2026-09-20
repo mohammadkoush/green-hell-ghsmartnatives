@@ -626,19 +626,10 @@ namespace GHSmartNatives
             catch (Exception ex) { HuntLog("stray traps: " + ex.Message); }
         }
 
-        // NOT BREAKABLE EITHER. "I keep breaking traps": a Construction takes weapon hits and
-        // falls after m_HitsCountToDestroy. His rule covers removal of any kind - a native trap is
-        // avoided, not hacked down.
-        [HarmonyPatch(typeof(Construction), "TakeDamage")]
-        private static class Patch_NativeTrapCannotBeBroken
-        {
-            private static bool Prefix(Construction __instance, ref bool __result)
-            {
-                if (!s_Traps.ContainsKey(__instance)) return true;
-                __result = false;
-                return false;
-            }
-        }
+        // BREAKABLE. It was made to refuse weapon hits on 2026-09-20 and he took that back the
+        // same day: "if you're gonna change the ability for me to break the trap, then I need to
+        // not take damage from it. Just strip it." So a native trap breaks like any construction;
+        // the sweep sees it gone and a scout sets the next one.
 
         // THEIRS, NOT HIS. His words: "the trap should not be removed by the player or interacted
         // with." A native trap offers no actions to the crosshair (no take, no arm, no deconstruct)

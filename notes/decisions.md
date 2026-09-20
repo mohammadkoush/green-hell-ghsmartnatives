@@ -129,6 +129,18 @@ the smoke from a fire." Read as:
   of his within reach of the fire that the game lets AI destroy.
 - Open: a fire that goes out before they arrive - do they still come. Read as: yes, to the spot.
 - Earlier offer from my side (a scout visiting his firecamp, "smoke") - this is his version of it.
+His answers: "A smoke can be seen with the maximum distance of a native. So if a native's
+maximum sight is 40 m, then that's the radius the scout needs to be looking at. Yes, a fire is a
+sure thing, no 15 seconds." So smoke range = the native's own sight range, no separate number.
+FACT to weigh when building: the game's natives see 10 m (AIParams.m_SightRange, read from the
+scripts), so smoke would be seen at 10 m too - which is no farther than the fire itself. His
+40 m was an example, not the game's number; whether smoke gets its own longer reach is his
+call once he knows this.
+His question back: "How long after the fire goes out do you want to do number four?" (a fire
+out before they arrive). My proposal, not decided: no timer at all. The wave is sent the moment
+the scout sees the fire; from then on they come to the spot whether it burns or not, and the
+game's own wave logic decides how long they stay. A fire that dies after being seen has already
+been seen.
 
 **Thugs, again: "still no thugs in any wave."** Said 2026-09-20 with the game closed; the only
 log on disk is still the 1.7.2 one (14:34), which also has no "numbers: wave" line at all - the

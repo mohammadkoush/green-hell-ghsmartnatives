@@ -35,7 +35,10 @@ namespace GHSmartNatives
         private ConfigEntry<float> _volSneak;
         private ConfigEntry<float> _volWalk;
         private ConfigEntry<float> _volRun;
-        private ConfigEntry<float> _senseRange;
+        private ConfigEntry<float> _senseWalk;
+        private ConfigEntry<float> _senseRun;
+        private ConfigEntry<float> _senseCrouch;
+        private ConfigEntry<float> _nightMinus;
 
         private void BindStealthConfig()
         {
@@ -52,9 +55,22 @@ namespace GHSmartNatives
             // EnemySenseRange, 7 m in any direction through anything, no eyes involved. It is a
             // number in the same shared params, so it gets the same treatment - set, restored.
             // (The other is Hunt's keep-hunting radius: a camp already on him stays on him.)
-            _senseRange = Config.Bind("Stealth", "SenseRangeMetres", 4f,
-                new ConfigDescription("How close a native senses you through anything, walls included " +
-                    "(the game's is 7 m). 0 = leave the game's.", new AcceptableValueRange<float>(0f, 12f)));
+            // BY WHAT HE IS DOING. His words, 2026-09-20: "Natives sense me two metres from behind
+            // walls. That's it. And especially if I'm making walking noise. And 4 m when I'm running
+            // noise, but not when I'm moving in crouch position." The game's sense range knows
+            // nothing of his move style, so the shared number is set each tick from his controller.
+            _senseWalk = Config.Bind("Stealth", "SenseWalkingMetres", 2f,
+                new ConfigDescription("How close a native senses you through anything while you walk or stand " +
+                    "(the game's is 7 m at all times).", new AcceptableValueRange<float>(0f, 12f)));
+            _senseRun = Config.Bind("Stealth", "SenseRunningMetres", 4f,
+                new ConfigDescription("...while you run.", new AcceptableValueRange<float>(0f, 12f)));
+            _senseCrouch = Config.Bind("Stealth", "SenseCrouchedMetres", 0f,
+                new ConfigDescription("...while you are crouched. 0 = not at all.", new AcceptableValueRange<float>(0f, 12f)));
+            // NIGHT. "Natives at night, they lose one metre on everything, sight and sound." The
+            // game's night is MainLevel.IsNight(): before 5 or after 22.
+            _nightMinus = Config.Bind("Stealth", "NightMinusMetres", 1f,
+                new ConfigDescription("At night every native sees and hears this much less far.",
+                    new AcceptableValueRange<float>(0f, 5f)));
             _volSneak = Config.Bind("Stealth", "StepVolumeCrouched", 0.45f,
                 new ConfigDescription("How loud your own crouched steps are to you.", new AcceptableValueRange<float>(0f, 2f)));
             _volWalk = Config.Bind("Stealth", "StepVolumeWalking", 0.85f,
@@ -90,11 +106,13 @@ namespace GHSmartNatives
         // What the natives hear and see
         // -----------------------------------------------------------------------------------------
 
-        private class ParamsOriginal { public float Sneak; public float Sight; public float Sense; }
+        private class ParamsOriginal { public float Sneak, Walk, Run, Swim, Action; public float Sight; public float Sense; }
         private readonly Dictionary<AIs.AIParams, ParamsOriginal> _paramsOrig = new Dictionary<AIs.AIParams, ParamsOriginal>();
         private bool _stillCrouched;
         private Vector3 _lastPlayerPos;
         private float _movedAt;
+        private int _moveKind;               // 0 walk or stand, 1 run, 2 crouched
+        private bool _night;
 
         /// <summary>Crouched and not moving for a moment: half the sight.</summary>
         private void StealthTick()
@@ -113,6 +131,20 @@ namespace GHSmartNatives
                     _stillCrouched = still;
                     HuntLog("stealth: " + (still ? "crouched and still - natives see half as far" : "moving or up - natives see their full range"));
                 }
+                int kind = fpp.IsDuck() ? 2 : (fpp.IsRunning() ? 1 : 0);
+                if (kind != _moveKind)
+                {
+                    _moveKind = kind;
+                    HuntLog("stealth: you " + (kind == 2 ? "crouch" : kind == 1 ? "run" : "walk") + " - sensed through walls within "
+                        + (kind == 2 ? _senseCrouch.Value : kind == 1 ? _senseRun.Value : _senseWalk.Value).ToString("F0") + " m");
+                }
+                bool night = false;
+                try { MainLevel lvl = MainLevel.Instance; night = lvl != null && lvl.IsNight(); } catch (Exception) { }
+                if (night != _night)
+                {
+                    _night = night;
+                    HuntLog("stealth: " + (night ? "night - natives see and hear " + _nightMinus.Value.ToString("F0") + " m less" : "day - their full ranges"));
+                }
             }
             catch (Exception) { }
         }
@@ -129,15 +161,23 @@ namespace GHSmartNatives
                 ParamsOriginal o;
                 if (!_paramsOrig.TryGetValue(prm, out o))
                 {
-                    o = new ParamsOriginal(); o.Sneak = prm.m_HearingSneakRange; o.Sight = prm.m_SightRange; o.Sense = prm.m_EnemySenseRange;
+                    o = new ParamsOriginal(); o.Sneak = prm.m_HearingSneakRange; o.Walk = prm.m_HearingWalkRange; o.Run = prm.m_HearingRunRange;
+                    o.Swim = prm.m_HearingSwimRange; o.Action = prm.m_HearingActionRange; o.Sight = prm.m_SightRange; o.Sense = prm.m_EnemySenseRange;
                     _paramsOrig[prm] = o;
                     HuntLog("stealth: '" + m.name + "' kind hears a crouched step at " + o.Sneak.ToString("F1") + " m, sees " + o.Sight.ToString("F1") + " m and senses " + o.Sense.ToString("F1") + " m by the game");
                 }
-                float wantSneak = Mathf.Max(0.5f, o.Sneak - _sneakMinus.Value);
-                float wantSight = _stillCrouched ? o.Sight * _stillSight.Value : o.Sight;
+                float dark = _night ? _nightMinus.Value : 0f;
+                float wantSneak = Mathf.Max(0.5f, o.Sneak - _sneakMinus.Value - dark);
+                float wantSight = Mathf.Max(0.5f, (_stillCrouched ? o.Sight * _stillSight.Value : o.Sight) - dark);
                 if (Mathf.Abs(prm.m_HearingSneakRange - wantSneak) > 0.01f) prm.m_HearingSneakRange = wantSneak;
                 if (Mathf.Abs(prm.m_SightRange - wantSight) > 0.01f) prm.m_SightRange = wantSight;
-                float wantSense = (_senseRange.Value > 0f) ? _senseRange.Value : o.Sense;
+                float wantWalk = Mathf.Max(0.5f, o.Walk - dark), wantRun = Mathf.Max(0.5f, o.Run - dark);
+                float wantSwim = Mathf.Max(0.5f, o.Swim - dark), wantAction = Mathf.Max(0.5f, o.Action - dark);
+                if (Mathf.Abs(prm.m_HearingWalkRange - wantWalk) > 0.01f) prm.m_HearingWalkRange = wantWalk;
+                if (Mathf.Abs(prm.m_HearingRunRange - wantRun) > 0.01f) prm.m_HearingRunRange = wantRun;
+                if (Mathf.Abs(prm.m_HearingSwimRange - wantSwim) > 0.01f) prm.m_HearingSwimRange = wantSwim;
+                if (Mathf.Abs(prm.m_HearingActionRange - wantAction) > 0.01f) prm.m_HearingActionRange = wantAction;
+                float wantSense = _moveKind == 2 ? _senseCrouch.Value : (_moveKind == 1 ? _senseRun.Value : _senseWalk.Value);
                 if (Mathf.Abs(prm.m_EnemySenseRange - wantSense) > 0.01f) prm.m_EnemySenseRange = wantSense;
             }
         }
@@ -146,7 +186,15 @@ namespace GHSmartNatives
         {
             foreach (KeyValuePair<AIs.AIParams, ParamsOriginal> kv in _paramsOrig)
             {
-                try { if (kv.Key != null) { kv.Key.m_HearingSneakRange = kv.Value.Sneak; kv.Key.m_SightRange = kv.Value.Sight; kv.Key.m_EnemySenseRange = kv.Value.Sense; } }
+                try
+                {
+                    if (kv.Key != null)
+                    {
+                        kv.Key.m_HearingSneakRange = kv.Value.Sneak; kv.Key.m_HearingWalkRange = kv.Value.Walk; kv.Key.m_HearingRunRange = kv.Value.Run;
+                        kv.Key.m_HearingSwimRange = kv.Value.Swim; kv.Key.m_HearingActionRange = kv.Value.Action;
+                        kv.Key.m_SightRange = kv.Value.Sight; kv.Key.m_EnemySenseRange = kv.Value.Sense;
+                    }
+                }
                 catch (Exception) { }
             }
             _paramsOrig.Clear();

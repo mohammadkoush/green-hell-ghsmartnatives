@@ -55,6 +55,8 @@ namespace GHSmartNatives
         private ConfigEntry<float> _huntRadius;
         private ConfigEntry<float> _keepRadius;
         private ConfigEntry<float> _giveUpSecs;
+        private ConfigEntry<bool>  _highGroundAlert;
+        private ConfigEntry<float> _highGround;
 
         // ---------- config: Roam ----------
         private ConfigEntry<bool>  _roamEnabled;
@@ -95,7 +97,67 @@ namespace GHSmartNatives
                     "(the game's own EnemyModule.m_TimeToLooseEnemy, raised to this).",
                     new AcceptableValueRange<float>(5f, 600f)));
 
+            // HIGH GROUND. His words, 2026-09-20: "Instead of not sensing me in high grounds, make it
+            // where they're on high alert, but still can't see me." A native that would take him as
+            // enemy while he stands well above it does not get him - no attack - but the camp learns
+            // the spot and its search heads there and sweeps: alert, looking up nothing.
+            _highGroundAlert = Config.Bind("Hunt", "HighGroundAlert", true,
+                "Natives that would notice you from well below do not get you - they cannot see you up " +
+                "there - but the camp goes on alert and searches the ground under you.");
+            _highGround = Config.Bind("Hunt", "HighGroundMetres", 2.5f,
+                new ConfigDescription("How far above a native your feet must be for that to hold.",
+                    new AcceptableValueRange<float>(1f, 10f)));
+
             _huntEnabled.SettingChanged += delegate { if (!_huntEnabled.Value) RestoreSenses(); };
+        }
+
+        /// <summary>He is up a tree or on a ledge above this native: it cannot have him.</summary>
+        internal static bool HighGroundHides(AIs.HumanAI m, Being e)
+        {
+            if (s_Self == null || !s_Self._highGroundAlert.Value || m == null || e == null) return false;
+            return e.transform.position.y - m.transform.position.y > s_Self._highGround.Value;
+        }
+
+        private static float s_HighGroundSaidAt = -100f;
+
+        // Runs before the game asks itself whether a calm camp should attack: any member holding
+        // him as enemy from below loses him, the camp remembers the spot. (Scouts are handled by
+        // their own prefix, which skips a high-ground sighting so it lands here.)
+        [HarmonyPatch(typeof(AIs.HumanAIGroup), "ShouldSetAttackState")]
+        private static class Patch_HighGroundAlert
+        {
+            private static void Prefix(AIs.HumanAIGroup __instance)
+            {
+                if (s_Self == null || !s_Self._highGroundAlert.Value) return;
+                try
+                {
+                    if (!Ours(__instance) || !__instance.m_Active || __instance.m_Members == null) return;
+                    if (__instance.m_State == AIs.HumanAIGroup.State.Attack) return;
+                    int hidden = 0; Vector3 where = Vector3.zero;
+                    for (int i = 0; i < __instance.m_Members.Count; i++)
+                    {
+                        AIs.HumanAI m = __instance.m_Members[i];
+                        if (m == null || m.m_EnemyModule == null || m.m_EnemyModule.m_Enemy == null) continue;
+                        Being e = m.m_EnemyModule.m_Enemy;
+                        if (e.gameObject == null || !(GameObjectExtension.IsPlayer(e.gameObject) || e.GetComponentInParent<Player>() != null)) continue;
+                        if (!HighGroundHides(m, e)) continue;
+                        m.m_EnemyModule.SetEnemy(null);
+                        m.m_EnemyModule.m_PriorityEnemy = null;
+                        where = e.transform.position; hidden++;
+                    }
+                    if (hidden == 0) return;
+                    Vector3 ground = where;
+                    ground.y = MainLevel.GetTerrainY(where);
+                    RememberSeen(__instance, ground);
+                    if (Time.time - s_HighGroundSaidAt > 30f)
+                    {
+                        s_HighGroundSaidAt = Time.time;
+                        s_Self.Say("Natives below are alert - they cannot see you up here");
+                        s_Self.Logger.LogInfo("hunt: " + hidden + " native(s) of '" + __instance.name + "' would have you from " + (where.y - ground.y).ToString("F1") + " m below - alert, not attacking");
+                    }
+                }
+                catch (Exception ex) { s_Self.HuntLog("high ground failed: " + ex.Message); }
+            }
         }
 
         private void BindRoamConfig()

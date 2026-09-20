@@ -14,15 +14,20 @@ each on its own switch, all through the game's own AI:
   where you actually are. With nothing to go on they wander the camp. The game's own rest behaviour
   does the walking, so the animation and pathing are the game's.
 - **Scouts.** Each calm camp sends one member out (its hunter, when it has one) to range far
-  around the camp with long, persistent steps, looking for you. A scout does not count for the
-  camp's notice radius: it has to see you, or walk into you. When it does, it turns for home at a
-  run, the camp remembers where you were, and a wave is spawned at your position (once per
-  cooldown); the scout's own sighting never raises its camp. A scout hangs back in any fight,
-  resets sprung traps it passes, and its death brings a wave to where it fell.
+  around the camp with long, persistent steps, in silence, looking for you. A scout does not count
+  for the camp's notice radius: it has to see you, or walk into you. When it does, it crouches
+  and watches: 15 seconds (a slider, 0 = at once) with you inside 20 m, then the wave is called
+  and it runs home. Close in on it and it bolts, still counting. Leave the 20 m first and it was
+  not sure of what it saw; more than three unsure sightings and a wave checks the spot anyway.
+  Kill it before its count is up and nothing is called. A lit fire of yours, or its smoke, inside
+  its sight is a sure sighting: the raid goes for the fire and the base. The scout's own sighting
+  never raises its camp. It hangs back in any fight and resets sprung traps it passes.
 - **Tactics.** Archers (hunters) hold their distance and throw while the others close in; the Thug
   waits at a distance until you are surrounded, a member is lost, or a timer runs out — then comes.
 - **Stealth.** Crouched steps are heard from two metres less; standing still while crouched halves
-  how far natives see you; your own footsteps sound as loud as the noise they make.
+  how far natives see you; your own footsteps sound as loud as the noise they make. Through walls
+  they sense you at 2 m walking, 4 m running, not at all crouched. At night they see and hear a
+  metre less. From high ground they cannot see you, but the camp below goes on alert and searches.
 - **Alarm.** A camp that starts hunting calls every calm camp within range into it. Scouts set the
   tribes' own spike traps where they walk (bow traps by choice), one at a time up to a cap, never
   near anything you built; stepping on one hurts and brings a scout to reset it. A native trap
@@ -63,10 +68,15 @@ panel too.
 | `Stealth.CrouchHeardMinusMetres` | 2 | crouched steps heard from this much less (the game's 5 m) |
 | `Stealth.StillCrouchSightFactor` | 0.5 | still and crouched, natives see this fraction of their range |
 | `Stealth.StepVolumeCrouched / Walking / Running` | 0.45 / 0.85 / 1.25 | your own steps, as loud as the noise they make |
+| `Stealth.SenseWalkingMetres / Running / Crouched` | 2 / 4 / 0 | sensed through walls, by what you are doing |
+| `Stealth.NightMinusMetres` | 1 | at night they see and hear this much less far |
 | `Scouts.ScoutsPerCamp` / `ScoutRadiusMetres` | 1 / 80 | how many go out, how far they range |
 | `Scouts.ScoutCallsWave` / `WaveCooldownSeconds` | on / 180 | the wave a sighting brings |
 | `Scouts.ScoutAlarmsCamp` | off | a sighting also brings the camp and its neighbours |
-| `Scouts.DeathCallsWave` | on | killing a scout brings a wave to the spot |
+| `Scouts.WatchSeconds` / `WatchRadiusMetres` | 15 / 20 | the watch before a call; the radius it counts in |
+| `Scouts.UnsureSightingsBeforeWave` | 3 | more than this and a wave checks the spot |
+| `Scouts.Silent` / `FiresAreTargets` | on / on | no voice on the walk; a seen fire brings a raid on the base |
+| `Hunt.HighGroundAlert` / `HighGroundMetres` | on / 2.5 | above them you are unseen, but they search below |
 | `Tactics.ArcherKeepMetres` | 10 | hunters back off below this and never walk in past it |
 | `Tactics.BossWaitsForSurround` / `BossKeepMetres` | on / 14 | the Thug waits here |
 | `Tactics.SurroundedCount` / `BossWaitMaxSeconds` | 2 / 45 | what releases the Thug |

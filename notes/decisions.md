@@ -3,7 +3,7 @@
 Running record of his rules for this mod, dated, in his words where they matter. The code
 carries the reasoning next to each rule; this file is the queue of what is said but not yet built.
 
-## 2026-09-20 - parked under LISTEN, not built
+## 2026-09-20 - parked under LISTEN, BUILT as 1.9.0 on GO the same day (Thugs excepted - waiting on a log)
 
 **A scout killed without having seen the player calls no wave.**
 His words: "If a scout has been killed by the player without seeing the player, that scout

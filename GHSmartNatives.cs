@@ -46,7 +46,7 @@ namespace GHSmartNatives
     {
         public const string Guid    = "com.mohammadkoush.ghsmartnatives";
         public const string Name    = "GHSmartNatives";
-        public const string Version = "1.8.0";
+        public const string Version = "1.9.0";
 
         private static GHSmartNativesPlugin s_Self;
         private Harmony _harmony;
@@ -281,6 +281,9 @@ namespace GHSmartNatives
                 _huntRadius.Value  = Slider("They notice you within (0 = only by eyes, ears and sense)", _huntRadius.Value, 0f, 200f, " m", 0);
                 _keepRadius.Value  = Slider("They keep hunting within", _keepRadius.Value, 10f, 300f, " m", 0);
                 _giveUpSecs.Value  = Slider("Give up after losing you for", _giveUpSecs.Value, 5f, 600f, " s", 0);
+                bool hg = _highGroundAlert.Value;
+                if (Row("From high ground they cannot see you - but they go on alert below", hg) != hg) _highGroundAlert.Value = !hg;
+                if (_highGroundAlert.Value) _highGround.Value = Slider("High ground starts this far above them", _highGround.Value, 1f, 10f, " m", 1);
             }
 
             GUILayout.Space(8f);
@@ -306,7 +309,10 @@ namespace GHSmartNatives
             {
                 _sneakMinus.Value = Slider("Crouched steps heard from this much less (game: 5 m)", _sneakMinus.Value, 0f, 5f, " m", 1);
                 _stillSight.Value = Slider("Still and crouched: their sight range times", _stillSight.Value, 0.1f, 1f, "", 2);
-                _senseRange.Value = Slider("They sense you through anything within (game: 7 m; 0 = the game's)", _senseRange.Value, 0f, 12f, " m", 0);
+                _senseWalk.Value = Slider("They sense you through anything within - walking or standing (game: 7 m)", _senseWalk.Value, 0f, 12f, " m", 0);
+                _senseRun.Value = Slider("...running", _senseRun.Value, 0f, 12f, " m", 0);
+                _senseCrouch.Value = Slider("...crouched (0 = not at all)", _senseCrouch.Value, 0f, 12f, " m", 0);
+                _nightMinus.Value = Slider("At night they see and hear this much less far", _nightMinus.Value, 0f, 5f, " m", 0);
                 _volSneak.Value = Slider("Your crouched steps, to you", _volSneak.Value, 0f, 2f, " x", 2);
                 _volWalk.Value  = Slider("Your walking steps", _volWalk.Value, 0f, 2f, " x", 2);
                 _volRun.Value   = Slider("Your running steps", _volRun.Value, 0f, 2f, " x", 2);
@@ -328,8 +334,13 @@ namespace GHSmartNatives
                 if (_scoutWave.Value) _scoutWaveCooldown.Value = Slider("Not another wave from that camp within", _scoutWaveCooldown.Value, 30f, 900f, " s", 0);
                 bool sa = _scoutAlarmsCamp.Value;
                 if (Row("...and brings its own camp too", sa) != sa) _scoutAlarmsCamp.Value = !sa;
-                bool sd = _scoutDeathWave.Value;
-                if (Row("Killing a scout brings a wave to the spot", sd) != sd) _scoutDeathWave.Value = !sd;
+                _scoutWatch.Value = Slider("It watches you this long before it can call (0 = at once)", _scoutWatch.Value, 0f, 15f, " s", 0);
+                _scoutWatchRadius.Value = Slider("...only while you stay within", _scoutWatchRadius.Value, 5f, 60f, " m", 0);
+                _scoutUnsureMax.Value = Mathf.RoundToInt(Slider("Unsure sightings it tolerates before a wave checks the spot", _scoutUnsureMax.Value, 0f, 10f, "", 0));
+                bool ssi = _scoutSilent.Value;
+                if (Row("Scouts move in silence", ssi) != ssi) _scoutSilent.Value = !ssi;
+                bool sfi = _scoutFires.Value;
+                if (Row("A lit fire or its smoke a scout sees brings a raid on the camp", sfi) != sfi) _scoutFires.Value = !sfi;
             }
 
             }

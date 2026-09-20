@@ -73,7 +73,8 @@ namespace GHSmartNatives
                 "The game hides its spike traps under leaves. Off (his rule): a trap he can see is a " +
                 "trap he can avoid.");
             _trapRearm = Config.Bind("Alarm", "RearmSeconds", 10f,
-                new ConfigDescription("How often native traps are checked and, if unarmed, armed again.",
+                new ConfigDescription("How often a freshly placed trap that has not yet taken its arming is tried " +
+                    "again. A trap that fired stays sprung until the scout resets it.",
                     new AcceptableValueRange<float>(2f, 120f)));
             _trapTrip = Config.Bind("Alarm", "TrapTripMetres", 1.2f,
                 new ConfigDescription("Standing this close to a native trap trips it, whether or not the " +
@@ -177,6 +178,7 @@ namespace GHSmartNatives
         // OnEnterTrigger(GameObject), a private m_Armed and a private Arm(bool).
         private static readonly Dictionary<Item, AIs.HumanAIGroup> s_Traps = new Dictionary<Item, AIs.HumanAIGroup>();
         private static readonly Dictionary<Item, float> s_TrapSetAt = new Dictionary<Item, float>();
+        private static readonly HashSet<Item> s_ArmedOnce = new HashSet<Item>();
 
         private static bool IsSpikes(Item t) { return t is Spikes; }
 
@@ -227,7 +229,7 @@ namespace GHSmartNatives
         private void DropTrap(Item t, string why)
         {
             try { if (t != null) UnityEngine.Object.Destroy(t.gameObject); } catch (Exception) { }
-            s_Traps.Remove(t); s_TrapSetAt.Remove(t); s_TrippedAt.Remove(t);
+            s_Traps.Remove(t); s_TrapSetAt.Remove(t); s_TrippedAt.Remove(t); s_ArmedOnce.Remove(t);
             if (s_TrapLogged < 12) { s_TrapLogged++; Logger.LogInfo("traps: one removed - " + why); }
         }
         private static int s_TrapLogged;
@@ -311,7 +313,9 @@ namespace GHSmartNatives
                     // Spikes: no arrow. Arm(false) sets the armed body and m_Armed.
                     tr.Method("Arm", new Type[] { typeof(bool) }).GetValue(false);
                     if (!_spikesHidden.Value) UnmaskSpikes((Spikes)t);
-                    return tr.Field("m_Armed").GetValue<bool>();
+                    bool ok = tr.Field("m_Armed").GetValue<bool>();
+                    if (ok) s_ArmedOnce.Add(t);
+                    return ok;
                 }
                 BowTrap bt = (BowTrap)t;
                 ItemSlot slot = tr.Field("m_ArrowSlot").GetValue<ItemSlot>();
@@ -324,7 +328,9 @@ namespace GHSmartNatives
                     else tr.Method("SetArrow", new Type[] { typeof(Item) }).GetValue(arrow);
                 }
                 tr.Method("Arm", new Type[] { typeof(bool) }).GetValue(false);
-                return tr.Field("m_Armed").GetValue<bool>();
+                bool okBow = tr.Field("m_Armed").GetValue<bool>();
+                if (okBow) s_ArmedOnce.Add(t);
+                return okBow;
             }
             catch (Exception ex)
             {
@@ -334,9 +340,11 @@ namespace GHSmartNatives
         }
 
         // HIS RULE: "add a timer where the traps get reset - every trap placed by the natives does
-        // not get armed; give the trap time to re-arm." Every RearmSeconds each native trap is
-        // looked at; one that is not armed is armed again, the arrow made afresh if it is gone.
-        // The first look is a few seconds after placement, after the game's own Start has run.
+        // not get armed; give the trap time to re-arm." AND: "the re-arming should only happen
+        // once, otherwise the scout will not work - a trap would re-arm itself before a scout can
+        // arrive." So the timer only sees to the FIRST arming: a trap that was never armed since
+        // placement (the game's own Start may have undone the first try) is armed again every
+        // RearmSeconds until it takes. A trap that fired stays sprung until the scout resets it.
         private float _rearmAt;
         private static int s_RearmLogged;
 
@@ -353,7 +361,8 @@ namespace GHSmartNatives
                 if (t == null) continue;
                 float setAt;
                 if (s_TrapSetAt.TryGetValue(t, out setAt) && Time.time - setAt < 3f) continue;
-                if (TrapArmed(t)) { armed++; continue; }
+                if (s_ArmedOnce.Contains(t)) { armed++; continue; }        // was armed once; if sprung, the scout's job
+                if (TrapArmed(t)) { s_ArmedOnce.Add(t); armed++; continue; }
                 if (!_trapsArmed.Value) continue;
                 if (ArmTrap(t, im, t.transform.position)) fixedUp++;
             }

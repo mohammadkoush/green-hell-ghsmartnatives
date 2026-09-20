@@ -79,3 +79,17 @@ when an eye actually lands on him.
 - Open: what "high ground" is in metres - read as his feet more than ~2.5 m above the native.
 - Open: how long the alert lasts after he goes quiet - read as the search's ForgetSeconds.
 - Open: does a trap tripped from above count the same.
+
+**Thugs, again: "still no thugs in any wave."** Said 2026-09-20 with the game closed; the only
+log on disk is still the 1.7.2 one (14:34), which also has no "numbers: wave" line at all - the
+game spawned no wave that session; what he calls waves are camp attacks. Stands as above: the
+first 1.8.0 log decides.
+
+**Night: one metre off everything.**
+His words: "Natives at night, they lose one meter on everything, sight and sound." Read as:
+between dusk and dawn (the game's own day/night), every native's sight range and every hearing
+range (sneak, walk, run, swim, action) is one metre shorter. Shared AIParams, set and restored
+like the stealth numbers, so it reaches every kind at once.
+- Open: the through-walls sense too ("everything"), or only eyes and ears ("sight and sound").
+  Read as eyes and ears only.
+- Open: a fixed 1 m, or a slider. Read as a slider, default 1.

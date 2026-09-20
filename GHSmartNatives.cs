@@ -46,7 +46,7 @@ namespace GHSmartNatives
     {
         public const string Guid    = "com.mohammadkoush.ghsmartnatives";
         public const string Name    = "GHSmartNatives";
-        public const string Version = "1.6.0";
+        public const string Version = "1.6.1";
 
         private static GHSmartNativesPlugin s_Self;
         private Harmony _harmony;
@@ -362,6 +362,13 @@ namespace GHSmartNatives
                 _membersMin.Value = Mathf.RoundToInt(Slider("No fewer than", _membersMin.Value, 1f, 12f, "", 0));
                 _membersMax.Value = Mathf.RoundToInt(Slider("No more than", _membersMax.Value, 1f, 12f, "", 0));
                 if (_membersMax.Value < _membersMin.Value) _membersMax.Value = _membersMin.Value;
+                bool ba = _bossInAttacks.Value;
+                if (Row("A Thug joins a camp's attack", ba) != ba) _bossInAttacks.Value = !ba;
+                if (_bossInAttacks.Value)
+                {
+                    _bossFrom.Value = Mathf.RoundToInt(Slider("...when the camp has at least", _bossFrom.Value, 1f, 12f, "", 0));
+                    _bossEveryNth.Value = Mathf.RoundToInt(Slider("...every Nth attack, N =", _bossEveryNth.Value, 1f, 10f, "", 0));
+                }
             }
             _cooldown.Value = Slider("How soon the next group or wave comes (1 = the game's own wait)",
                                      _cooldown.Value, 0.1f, 1f, " x", 2);

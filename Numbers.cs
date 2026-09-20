@@ -38,6 +38,8 @@ namespace GHSmartNatives
         private ConfigEntry<int>   _membersMin;
         private ConfigEntry<int>   _membersMax;
         private ConfigEntry<int>   _bossFrom;
+        private ConfigEntry<bool>  _bossInAttacks;
+        private ConfigEntry<int>   _bossEveryNth;
         private ConfigEntry<float> _cooldown;
         private ConfigEntry<KeyboardShortcut> _waveKey;
 
@@ -55,6 +57,18 @@ namespace GHSmartNatives
             _bossFrom = Config.Bind("Numbers", "BossFromCount", 4,
                 new ConfigDescription("A wave of at least this many always contains one Thug (the boss). " +
                     "0 = leave it to the game's own roll.", new AcceptableValueRange<int>(0, 12)));
+            // HIS TEST: "13 false, but the wave now is more intense. So maybe a thug every other
+            // time? A setting on/off plus a number to skip." And the log of that session: not one
+            // StartWave or SpawnWave - what he calls waves are CAMPS coming for him (the notice at
+            // 20 m, a tripped trap). So the Thug rides on a camp's attack: every Nth time a camp of
+            // BossFromCount or more goes to Attack without a Thug, the game is asked for a wave of
+            // one, flagged to be the Thug.
+            _bossInAttacks = Config.Bind("Numbers", "BossInCampAttacks", true,
+                "When a camp of BossFromCount or more attacks you without a Thug among them, a Thug " +
+                "is sent to join - every Nth such attack.");
+            _bossEveryNth = Config.Bind("Numbers", "BossEveryNthAttack", 2,
+                new ConfigDescription("1 = every camp attack brings a Thug, 2 = every other, and so on.",
+                    new AcceptableValueRange<int>(1, 10)));
             _cooldown = Config.Bind("Numbers", "SpawnCooldownMultiplier", 1f,
                 new ConfigDescription("Scales the wait before the next group or wave spawns. LOWER means " +
                     "sooner: 0.5 = half the usual wait, 1 = unchanged. Applied once each time the game " +
@@ -197,6 +211,37 @@ namespace GHSmartNatives
                 }
                 catch (Exception ex) { s_Self.NumbersLog("wave count failed, leaving the game's: " + ex.Message); }
             }
+        }
+
+        private static int s_CampAttacks;
+
+        /// <summary>Called when a camp enters Attack (from the call-to-arms postfix).</summary>
+        internal void BossForCampAttack(AIs.HumanAIGroup g)
+        {
+            try
+            {
+                if (!NumbersOn() || !_bossInAttacks.Value || _bossFrom.Value <= 0) return;
+                if (g == null || g.IsWave() || !Ours(g) || g.m_Members == null) return;
+                if (g.m_Members.Count < _bossFrom.Value) return;
+                for (int i = 0; i < g.m_Members.Count; i++) if (IsBoss(g.m_Members[i])) return;
+                s_CampAttacks++;
+                int every = Mathf.Max(1, _bossEveryNth.Value);
+                if (s_CampAttacks % every != 0)
+                {
+                    NumbersLog("camp '" + g.name + "' attacks (" + g.m_Members.Count + ") - attack " + s_CampAttacks + ", no Thug this time (every " + every + ")");
+                    return;
+                }
+                AIs.EnemyAISpawnManager mgr = AIs.EnemyAISpawnManager.Get();
+                if (mgr == null) return;
+                s_BossEscort = true;
+                AIs.HumanAIWave w = null;
+                try { w = mgr.SpawnWave(1, false, null); }
+                finally { s_BossEscort = false; }
+                NumbersLog("camp '" + g.name + "' attacks (" + g.m_Members.Count + ") - attack " + s_CampAttacks + ": a Thug "
+                    + (w != null ? "is sent to join" : "could not be sent (the game declined)"));
+                if (w != null) Say("A Thug joins the attack");
+            }
+            catch (Exception ex) { NumbersLog("camp attack boss failed: " + ex.Message); }
         }
 
         private static AIs.HumanAIWave s_BossWave;     // the wave being spawned that must hold a boss

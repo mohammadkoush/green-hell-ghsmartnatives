@@ -164,6 +164,7 @@ namespace GHSmartNatives
                     if (t == null) return;
                     RememberSeen(__instance, t.transform.position);
                     s_Self.CallNeighbours(__instance, t.transform.position);
+                    s_Self.BossForCampAttack(__instance);
                 }
                 catch (Exception ex) { s_Self.HuntLog("call to arms failed: " + ex.Message); }
             }

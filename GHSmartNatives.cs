@@ -46,7 +46,7 @@ namespace GHSmartNatives
     {
         public const string Guid    = "com.mohammadkoush.ghsmartnatives";
         public const string Name    = "GHSmartNatives";
-        public const string Version = "1.3.1";
+        public const string Version = "1.3.2";
 
         private static GHSmartNativesPlugin s_Self;
         private Harmony _harmony;
@@ -321,6 +321,10 @@ namespace GHSmartNatives
             if (_trapsEnabled.Value)
             {
                 _trapsPerCamp.Value = Mathf.RoundToInt(Slider("Traps per camp (applies when a camp next wakes)", _trapsPerCamp.Value, 1f, 8f, "", 0));
+                _trapsMax.Value = Mathf.RoundToInt(Slider("Never more traps in the world than   (now " + s_Traps.Count + ")", _trapsMax.Value, 1f, 30f, "", 0));
+                _trapLife.Value = Slider("A trap vanishes on its own after", _trapLife.Value, 1f, 240f, " min", 0);
+                _trapTrip.Value = Slider("Standing this close fires it", _trapTrip.Value, 0.5f, 4f, " m", 1);
+                _trapsForget.Value = Slider("A trap this far behind you is removed", _trapsForget.Value, 30f, 500f, " m", 0);
                 _trapRing.Value = Slider("The ring sits at", _trapRing.Value, 6f, 40f, " m", 0);
                 bool arr = _trapsArmed.Value;
                 if (Row("The traps carry arrows and shoot", arr) != arr) _trapsArmed.Value = !arr;

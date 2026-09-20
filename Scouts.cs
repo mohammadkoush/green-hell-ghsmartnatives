@@ -65,7 +65,59 @@ namespace GHSmartNatives
                     new AcceptableValueRange<float>(5f, 120f)));
         }
 
-        private class ScoutState { public float Heading; public float RetreatUntil; public float FoundAt; }
+        private class ScoutState
+        {
+            public float Heading; public float RetreatUntil; public float FoundAt;
+            public BowTrap Errand;          // a trap to walk to and reset - his rule, see TripSendsScout
+            public Vector3 ErrandAt; public float ErrandSince;
+        }
+
+        // A TRIPPED TRAP SENDS A SCOUT, NOT A WAVE. His words: "When triggering a trap the game should
+        // send a scout. When the scout reaches the trap it resets it. If the scout sees me or hears
+        // me, it runs back home and sends a wave. More logic: it gives the player the chance to
+        // avoid being spotted." So the trip is an errand for the camp's scout (one is assigned if
+        // none is out): walk to the trap, re-arm it, go back to scouting. The scout's own eyes and
+        // ears on the way are the same as ever - a sighting means home at a run and a wave.
+        internal bool TripSendsScout(AIs.HumanAIGroup g, BowTrap trap, Vector3 at)
+        {
+            if (!_scoutsEnabled.Value || g == null || !g.m_Active || g.m_Members == null) return false;
+            if (g.m_State != AIs.HumanAIGroup.State.Calm) return false;      // already up in arms: the alarm as before
+            AssignScouts(g);
+            AIs.HumanAI scout = null;
+            for (int i = 0; i < g.m_Members.Count; i++) if (IsScout(g.m_Members[i])) { scout = g.m_Members[i]; break; }
+            if (scout == null && g.m_Members.Count >= 1)
+            {
+                // A camp of one sends its one.
+                scout = g.m_Members[0];
+                if (scout != null && !IsScout(scout)) { ScoutState fresh = new ScoutState(); fresh.Heading = UnityEngine.Random.Range(0f, 360f); s_Scouts[scout] = fresh; }
+            }
+            if (scout == null) return false;
+            ScoutState sc = s_Scouts[scout];
+            if (sc.Errand != null && Time.time - sc.ErrandSince < 120f) return true;    // already on its way
+            sc.Errand = trap; sc.ErrandAt = at; sc.ErrandSince = Time.time;
+            sc.RetreatUntil = 0f;
+            scout.m_StartPosition = at;
+            Vector3 d = at - scout.transform.position; d.y = 0f;
+            if (d.sqrMagnitude > 0.01f) scout.m_StartForward = d.normalized;
+            scout.m_MoveStyle = Enums.AIMoveStyle.Walk;
+            Logger.LogInfo("scouts: '" + scout.name + "' of '" + g.name + "' sent to a tripped trap " + Mathf.RoundToInt(d.magnitude) + " m away");
+            Say("A native comes to see about the trap");
+            return true;
+        }
+
+        private void FinishErrand(AIs.HumanAI m, ScoutState sc)
+        {
+            BowTrap t = sc.Errand;
+            sc.Errand = null;
+            if (t == null) return;
+            try
+            {
+                if (_trapsArmed.Value) ArmTrap(t, ItemsManager.Get(), t.transform.position);
+                s_TrippedAt.Remove(t);
+                Logger.LogInfo("scouts: '" + m.name + "' reset the trap");
+            }
+            catch (Exception ex) { HuntLog("trap reset failed: " + ex.Message); }
+        }
         private static readonly Dictionary<AIs.HumanAI, ScoutState> s_Scouts = new Dictionary<AIs.HumanAI, ScoutState>();
         private static readonly Dictionary<AIs.HumanAIGroup, float> s_LastScoutWave = new Dictionary<AIs.HumanAIGroup, float>();
         private static int s_ScoutLogged;
@@ -111,6 +163,14 @@ namespace GHSmartNatives
             // Retreating: leave it to the rest goal, which is walking it home.
             if (now < sc.RetreatUntil) return true;
 
+            // On an errand to a trap: walk there (the rest goal does it), reset it, then scout on.
+            // Its eyes stay open on the way - the sighting check below runs first.
+            if (sc.Errand != null)
+            {
+                if (sc.Errand == null || now - sc.ErrandSince > 180f) sc.Errand = null;
+                else if (Vector3.Distance(here, sc.ErrandAt) < 2.5f) { FinishErrand(m, sc); return true; }
+            }
+
             // Found you? Its own eyes, or it walked into you.
             if (target != null)
             {
@@ -119,6 +179,7 @@ namespace GHSmartNatives
                 if (sees || dt < 6f)
                 {
                     sc.FoundAt = now;
+                    sc.Errand = null;
                     sc.RetreatUntil = now + _scoutRetreat.Value;
                     m.m_StartPosition = st.Home;
                     m.m_StartForward = (st.Home - here).normalized;
@@ -130,6 +191,13 @@ namespace GHSmartNatives
                     if (_scoutWave.Value) ScoutWave(g);
                     return true;
                 }
+            }
+
+            if (sc.Errand != null)
+            {
+                // Keep the trap as the destination; the rest goal re-paths on its own.
+                if (Vector3.Distance(m.m_StartPosition, sc.ErrandAt) > 1f) m.m_StartPosition = sc.ErrandAt;
+                return true;
             }
 
             bool arrived = Vector3.Distance(here, m.m_StartPosition) < 3f;

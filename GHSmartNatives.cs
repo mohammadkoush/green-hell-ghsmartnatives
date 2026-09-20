@@ -46,7 +46,7 @@ namespace GHSmartNatives
     {
         public const string Guid    = "com.mohammadkoush.ghsmartnatives";
         public const string Name    = "GHSmartNatives";
-        public const string Version = "1.3.2";
+        public const string Version = "1.4.0";
 
         private static GHSmartNativesPlugin s_Self;
         private Harmony _harmony;
@@ -316,6 +316,8 @@ namespace GHSmartNatives
             bool call = _callEnabled.Value;
             if (Row("Camps call each other", call) != call) _callEnabled.Value = !call;
             if (_callEnabled.Value) _callRadius.Value = Slider("A call to arms carries", _callRadius.Value, 20f, 400f, " m", 0);
+            bool ts = _tripScout.Value;
+            if (Row("A tripped trap sends a scout to look, not the whole camp", ts) != ts) _tripScout.Value = !ts;
             bool traps = _trapsEnabled.Value;
             if (Row("A ring of bow traps around a camp - stepping on one is a call to arms", traps) != traps) _trapsEnabled.Value = !traps;
             if (_trapsEnabled.Value)

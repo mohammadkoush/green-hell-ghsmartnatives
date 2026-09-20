@@ -40,6 +40,7 @@ namespace GHSmartNatives
         private ConfigEntry<float> _trapsForget;
         private ConfigEntry<float> _trapTrip;
         private ConfigEntry<int>   _trapsMax;
+        private ConfigEntry<bool>  _tripScout;
         private ConfigEntry<float> _trapLife;
 
         private void BindAlarmConfig()
@@ -70,6 +71,10 @@ namespace GHSmartNatives
             // away from the player. A trap not visited by the player is a trap set away from the
             // player: a bad placement." And: "a timeout for the trap to disappear on its own -
             // traps around camp will never disappear otherwise, and that makes traps everywhere."
+            _tripScout = Config.Bind("Alarm", "TripSendsScout", true,
+                "A tripped trap sends the camp's scout to look and reset it, instead of raising the " +
+                "camp at once. If the scout sees or hears you it runs home and a wave comes. Off: " +
+                "the trip alarms the camp directly.");
             _trapsMax = Config.Bind("Alarm", "MaxTraps", 6,
                 new ConfigDescription("Never more native traps than this in the world at once. Room for " +
                     "new ones is made by removing the ones farthest from you.", new AcceptableValueRange<int>(1, 30)));
@@ -279,9 +284,7 @@ namespace GHSmartNatives
                     float last;
                     if (s_TrippedAt.TryGetValue(__instance, out last) && Time.time - last < 20f && Time.time - last > 0.5f) return;
                     s_TrippedAt[__instance] = Time.time;
-                    s_Self.Say("You tripped a native trap - the camp is alarmed");
-                    if (g != null && g.m_Active) s_Self.Alarm(g, obj.transform.position, "trap tripped", true);
-                    else s_Self.CallNeighbours(g, obj.transform.position);       // the camp is gone; its neighbours are not
+                    s_Self.TripResponse(g, __instance, obj.transform.position, "trap tripped");
                 }
                 catch (Exception ex) { s_Self.HuntLog("trap trip failed: " + ex.Message); }
             }
@@ -292,6 +295,15 @@ namespace GHSmartNatives
         // trap made outside the item registry I cannot see from here, so the alarm no longer waits
         // for it: standing within TrapTripMetres of a native trap trips it. The arrow, if any, is
         // still the game's to shoot through its own trigger.
+        /// <summary>What a trip brings: a scout to look (his rule), or, with no calm camp to send one, the alarm.</summary>
+        private void TripResponse(AIs.HumanAIGroup g, BowTrap trap, Vector3 at, string why)
+        {
+            if (_tripScout.Value && TripSendsScout(g, trap, at)) return;
+            Say("You tripped a native trap - the camp is alarmed");
+            if (g != null && g.m_Active) Alarm(g, at, why, true);
+            else CallNeighbours(g, at);
+        }
+
         private float _trapTripAt;
         private static readonly Dictionary<BowTrap, float> s_TrippedAt = new Dictionary<BowTrap, float>();
         private static bool s_TripHandled;
@@ -319,11 +331,8 @@ namespace GHSmartNatives
                 catch (Exception ex) { HuntLog("trap fire failed: " + ex.Message); }
                 if (!s_TripHandled)
                 {
-                    // The prefix did not take it (IsPlayer said no to the Player object): ring it here.
-                    Say("You tripped a native trap - the camp is alarmed");
-                    AIs.HumanAIGroup g = kv.Value;
-                    if (g != null && g.m_Active) Alarm(g, p.transform.position, "trap tripped (by distance" + (fired ? ", fired" : "") + ")", true);
-                    else CallNeighbours(g, p.transform.position);
+                    // The prefix did not take it (IsPlayer said no to the Player object): here instead.
+                    TripResponse(kv.Value, t, p.transform.position, "trap tripped (by distance" + (fired ? ", fired" : "") + ")");
                 }
                 s_TripHandled = false;
                 return;

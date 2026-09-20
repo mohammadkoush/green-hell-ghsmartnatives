@@ -60,8 +60,21 @@ run is not a second phase, it is the same count with the scout moving instead of
 its way of staying alive until the count is done. After the call it keeps going home as today.
 - Open: what "approaches" is - read as him getting closer than he was when the watch began,
   by a few metres (~3 m), or within ~8 m of it.
-- Open: the timer while he is out of its sight or past 20 m - keeps running once started, or
-  pauses. Read as: keeps running once started (it has seen him; it is counting to the call).
+His answer to "keeps running or pauses": "I need to stay in the 20 m radius for 15 seconds
+after the scout noticed me, so the counter does not start till the scout sees the player. Then
+it waits for the timer, or runs away trying to stay alive till the timer is up. But if I left
+the 20 m radius before the 15 seconds are up, then the scout was not sure of what it saw. And
+if it keeps happening more than three times, then a wave comes in anyway. Checking on the
+spot." So:
+- The count starts only at a sighting. It runs while he stays within 20 m of the scout -
+  crouching scout or running scout, either way.
+- He leaves the 20 m before it is up: the count is void, the scout "was not sure of what it
+  saw" - it goes back to scouting, no wave. That is one UNSURE sighting.
+- More than three unsure sightings (the fourth): the scout has seen enough - a wave comes
+  anyway, "checking on the spot": the wave is sent to where he was last seen, not to him.
+- Open: unsure sightings counted per scout, or per camp. Read as per scout (it is the one
+  that keeps seeing him); a new scout starts at zero.
+- Open: do the unsure sightings ever expire. Read as: no, until the scout dies or calls.
 
 **Thugs: "not joining the waves for sure."**
 Reported 2026-09-20 after a session that ran 1.7.2 (the log's load line). The camp-attack Thug

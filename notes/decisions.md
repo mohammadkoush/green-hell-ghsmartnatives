@@ -67,3 +67,15 @@ The game's sense (AIParams.m_EnemySenseRange, shared per kind) does not know his
 so the number is set each tick from FPPController (IsDuck / IsRunning) - set, not chased.
 - Open: standing still, upright - walking's 2 m, or crouching's 0? Read as 2 m (upright).
 - Open: three sliders, or the two numbers with crouch fixed at 0.
+
+**High ground: on alert, not blind.**
+His words, on the untested item "high ground hides you": "Instead of not sensing me in high
+grounds, make it where they're on high alert, but still can't see me." Read as: when he is
+above them (up a tree, on a ledge) and close enough that they would otherwise have him, they
+do not get him as an enemy - no attack, no sight - but the camp goes on alert: the game's own
+Upset state (HumanAIGroup.State.Upset, the one between Calm and Attack), searching and sweeping
+around where the sense fired, looking up nothing. They find him only when he comes down, or
+when an eye actually lands on him.
+- Open: what "high ground" is in metres - read as his feet more than ~2.5 m above the native.
+- Open: how long the alert lasts after he goes quiet - read as the search's ForgetSeconds.
+- Open: does a trap tripped from above count the same.

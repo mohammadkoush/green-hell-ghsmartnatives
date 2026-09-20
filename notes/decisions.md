@@ -47,6 +47,18 @@ it crouches where it is. Read as:
   count or pauses it (the open question above, still open).
 - 20 m is a number; open whether it is its own slider or the existing ScoutKeep (20 m today).
 
+**Approached during the watch: it bolts, and tries for the wave.**
+His words: "Within the 15 seconds, if the player notices the scout and approaches it, the scout
+runs away instantly, trying to call for a wave." Read as: while the scout crouches and counts,
+him closing the distance breaks the watch - the scout is up and running home at once. "Trying
+to call" = the wave is not guaranteed: it calls only if it gets away; kill it on the run and
+there is no wave (rule one). So the wave from a broken watch comes when the scout reaches
+home, not the moment it turns.
+- Open: what "approaches" is - read as him getting closer than he was when the watch began,
+  by a few metres (~3 m), or within ~8 m of it.
+- Open: a full watch (15 s uninterrupted) - does the wave come the moment it is up, as today,
+  or also only once it is home? Read as: at once, the watch earned it.
+
 **Thugs: "not joining the waves for sure."**
 Reported 2026-09-20 after a session that ran 1.7.2 (the log's load line). The camp-attack Thug
 fix (BossCampMinMembers, 1.7.3) was built during that session and first deployed today inside

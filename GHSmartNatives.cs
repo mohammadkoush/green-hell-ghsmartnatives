@@ -46,7 +46,7 @@ namespace GHSmartNatives
     {
         public const string Guid    = "com.mohammadkoush.ghsmartnatives";
         public const string Name    = "GHSmartNatives";
-        public const string Version = "1.7.0";
+        public const string Version = "1.7.2";
 
         private static GHSmartNativesPlugin s_Self;
         private Harmony _harmony;

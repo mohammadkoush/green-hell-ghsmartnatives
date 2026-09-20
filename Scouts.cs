@@ -70,6 +70,7 @@ namespace GHSmartNatives
             public float Heading; public float RetreatUntil; public float FoundAt;
             public Item Errand;             // a trap to walk to and reset - his rule, see TripSendsScout
             public Vector3 ErrandAt; public float ErrandSince;
+            public bool ErrandRun;          // a neighbour's scout runs, to make up the distance
         }
 
         // A TRIPPED TRAP SENDS A SCOUT, NOT A WAVE. His words: "When triggering a trap the game should
@@ -78,31 +79,62 @@ namespace GHSmartNatives
         // avoid being spotted." So the trip is an errand for the camp's scout (one is assigned if
         // none is out): walk to the trap, re-arm it, go back to scouting. The scout's own eyes and
         // ears on the way are the same as ever - a sighting means home at a run and a wave.
+        // HIS RULE, 2026-09-20: "A tripped trap, regardless of where I am, should send a scout. If
+        // the local tribe is empty, send one from the neighbours' tribe - and cut their time in half
+        // so they reach the trap faster. Only if the local tribe is empty." So: the trap's own camp
+        // if it is alive and calm; failing that the nearest calm camp within the call radius, whose
+        // scout RUNS instead of walking. A camp that is fighting keeps fighting - its scout is not
+        // pulled out of the line.
         internal bool TripSendsScout(AIs.HumanAIGroup g, Item trap, Vector3 at)
         {
-            if (!_scoutsEnabled.Value || g == null || !g.m_Active || g.m_Members == null) return false;
-            if (g.m_State != AIs.HumanAIGroup.State.Calm) return false;      // already up in arms: the alarm as before
-            AssignScouts(g);
+            if (!_scoutsEnabled.Value) return false;
+            AIs.HumanAIGroup camp = null;
+            bool neighbour = false;
+            if (g != null && g.m_Active && g.m_Members != null && g.m_Members.Count > 0 && g.m_State == AIs.HumanAIGroup.State.Calm) camp = g;
+            if (camp == null)
+            {
+                camp = NearestCalmCamp(at, g);
+                neighbour = camp != null;
+            }
+            if (camp == null) return false;
+
+            AssignScouts(camp);
             AIs.HumanAI scout = null;
-            for (int i = 0; i < g.m_Members.Count; i++) if (IsScout(g.m_Members[i])) { scout = g.m_Members[i]; break; }
-            if (scout == null && g.m_Members.Count >= 1)
+            for (int i = 0; i < camp.m_Members.Count; i++) if (IsScout(camp.m_Members[i])) { scout = camp.m_Members[i]; break; }
+            if (scout == null && camp.m_Members.Count >= 1)
             {
                 // A camp of one sends its one.
-                scout = g.m_Members[0];
+                scout = camp.m_Members[0];
                 if (scout != null && !IsScout(scout)) { ScoutState fresh = new ScoutState(); fresh.Heading = UnityEngine.Random.Range(0f, 360f); s_Scouts[scout] = fresh; }
             }
             if (scout == null) return false;
             ScoutState sc = s_Scouts[scout];
             if (sc.Errand != null && Time.time - sc.ErrandSince < 120f) return true;    // already on its way
-            sc.Errand = trap; sc.ErrandAt = at; sc.ErrandSince = Time.time;
+            sc.Errand = trap; sc.ErrandAt = at; sc.ErrandSince = Time.time; sc.ErrandRun = neighbour;
             sc.RetreatUntil = 0f;
             scout.m_StartPosition = at;
             Vector3 d = at - scout.transform.position; d.y = 0f;
             if (d.sqrMagnitude > 0.01f) scout.m_StartForward = d.normalized;
-            scout.m_MoveStyle = Enums.AIMoveStyle.Walk;
-            Logger.LogInfo("scouts: '" + scout.name + "' of '" + g.name + "' sent to a tripped trap " + Mathf.RoundToInt(d.magnitude) + " m away");
-            Say("A native comes to see about the trap");
+            scout.m_MoveStyle = neighbour ? Enums.AIMoveStyle.Run : Enums.AIMoveStyle.Walk;
+            Logger.LogInfo("scouts: '" + scout.name + "' of '" + camp.name + "' " + (neighbour ? "(a neighbour camp - the trap's own is gone) RUNS" : "sent")
+                + " to a tripped trap " + Mathf.RoundToInt(d.magnitude) + " m away");
+            Say(neighbour ? "A native from a nearby camp runs to see about the trap" : "A native comes to see about the trap");
             return true;
+        }
+
+        private AIs.HumanAIGroup NearestCalmCamp(Vector3 at, AIs.HumanAIGroup except)
+        {
+            AIs.HumanAIGroup best = null; float bestD = _callRadius.Value;
+            if (AIs.HumanAIGroup.s_AIGroups == null) return null;
+            for (int i = 0; i < AIs.HumanAIGroup.s_AIGroups.Count; i++)
+            {
+                AIs.HumanAIGroup o = AIs.HumanAIGroup.s_AIGroups[i];
+                if (o == null || o == except || !o.m_Active || !Ours(o) || o.IsWave() || o.IsPatrol()) continue;
+                if (o.m_State != AIs.HumanAIGroup.State.Calm || o.m_Members == null || o.m_Members.Count == 0) continue;
+                float d = ClosestMember(o, at);
+                if (d < bestD) { bestD = d; best = o; }
+            }
+            return best;
         }
 
         private void FinishErrand(AIs.HumanAI m, ScoutState sc)
@@ -195,8 +227,10 @@ namespace GHSmartNatives
 
             if (sc.Errand != null)
             {
-                // Keep the trap as the destination; the rest goal re-paths on its own.
+                // Keep the trap as the destination; the rest goal re-paths on its own. A neighbour's
+                // scout keeps running (set, not chased: only when the game put it back to a walk).
                 if (Vector3.Distance(m.m_StartPosition, sc.ErrandAt) > 1f) m.m_StartPosition = sc.ErrandAt;
+                if (sc.ErrandRun && m.m_MoveStyle != Enums.AIMoveStyle.Run) m.m_MoveStyle = Enums.AIMoveStyle.Run;
                 return true;
             }
 

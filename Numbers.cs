@@ -300,7 +300,11 @@ namespace GHSmartNatives
                 {
                     if (!NumbersOn() || s_Self._bossFrom.Value <= 0) return;
                     if (__instance == null) return;
-                    if (__instance.m_Count < s_Self._bossFrom.Value && s_EscortWave != __instance) return;
+                    // THE ORDER, from the log: "HumanAIWave - 1" (the game's own line from TrySpawnWave)
+                    // comes BEFORE "a Thug is sent to join" - so TrySpawnWave runs inside SpawnWave,
+                    // before the SpawnWave postfix could remember the escort wave. While the escort
+                    // flag is up, whatever wave is being tried is the escort.
+                    if (__instance.m_Count < s_Self._bossFrom.Value && s_EscortWave != __instance && !s_BossEscort) return;
                     s_BossWave = __instance;
                 }
                 catch (Exception) { }

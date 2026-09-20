@@ -46,7 +46,7 @@ namespace GHSmartNatives
     {
         public const string Guid    = "com.mohammadkoush.ghsmartnatives";
         public const string Name    = "GHSmartNatives";
-        public const string Version = "1.6.3";
+        public const string Version = "1.7.0";
 
         private static GHSmartNativesPlugin s_Self;
         private Harmony _harmony;
@@ -223,7 +223,12 @@ namespace GHSmartNatives
         private Rect _rect = new Rect(200f, 120f, 560f, 700f);
         private Vector2 _scroll;
         private bool _styled;
-        private GUIStyle _title, _head, _row, _dim, _rowBtn, _rowBtnDim, _noticeStyle;
+        private GUIStyle _title, _head, _row, _dim, _rowBtn, _rowBtnDim, _noticeStyle, _tabOn, _tabOff;
+        // TABS. His words: "I thought we agreed on tabs - this is a long uncategorised list." Five,
+        // fixed in this order so a hand learns where each lives: Hunt (hunt, roam, stealth), Traps
+        // (the ring and the calls), Scouts, Tactics, Numbers (counts, the Thug, waves, the rest).
+        private static readonly string[] Tabs = new string[] { "Hunt", "Traps", "Scouts", "Tactics", "Numbers" };
+        private int _tab;
         private Texture2D _radioOn, _radioOff, _pixel, _cross;
 
         private void OnGUI()
@@ -255,8 +260,18 @@ namespace GHSmartNatives
             GUILayout.Label(StatusText(), _dim);
             GUILayout.Space(6f);
 
+            GUILayout.BeginHorizontal();
+            for (int t = 0; t < Tabs.Length; t++)
+            {
+                if (GUILayout.Button(Tabs[t], t == _tab ? _tabOn : _tabOff, GUILayout.Height(30f)) && t != _tab) { _tab = t; _scroll = Vector2.zero; }
+            }
+            GUILayout.EndHorizontal();
+            GUILayout.Space(6f);
+
             _scroll = GUILayout.BeginScrollView(_scroll);
 
+            if (_tab == 0)
+            {
             GUILayout.Label("Hunt", _head);
             bool hunt = _huntEnabled.Value;
             if (Row("Natives hunt you when you come near", hunt) != hunt) _huntEnabled.Value = !hunt;
@@ -295,7 +310,10 @@ namespace GHSmartNatives
                 _volRun.Value   = Slider("Your running steps", _volRun.Value, 0f, 2f, " x", 2);
             }
 
-            GUILayout.Space(8f);
+            }
+
+            if (_tab == 2)
+            {
             GUILayout.Label("Scouts", _head);
             bool sco = _scoutsEnabled.Value;
             if (Row("Camps send scouts out - they look for you, back off, and call a wave", sco) != sco) _scoutsEnabled.Value = !sco;
@@ -310,7 +328,10 @@ namespace GHSmartNatives
                 if (Row("...and brings its own camp too", sa) != sa) _scoutAlarmsCamp.Value = !sa;
             }
 
-            GUILayout.Space(8f);
+            }
+
+            if (_tab == 3)
+            {
             GUILayout.Label("Tactics", _head);
             bool tac = _tacticsEnabled.Value;
             if (Row("Archers keep their distance; the boss waits for the surround", tac) != tac) _tacticsEnabled.Value = !tac;
@@ -327,8 +348,11 @@ namespace GHSmartNatives
                 }
             }
 
-            GUILayout.Space(8f);
-            GUILayout.Label("Alarm", _head);
+            }
+
+            if (_tab == 1)
+            {
+            GUILayout.Label("Traps and calls", _head);
             bool call = _callEnabled.Value;
             if (Row("Camps call each other", call) != call) _callEnabled.Value = !call;
             if (_callEnabled.Value) _callRadius.Value = Slider("A call to arms carries", _callRadius.Value, 20f, 400f, " m", 0);
@@ -353,7 +377,10 @@ namespace GHSmartNatives
                 if (Row("The traps are armed (bow traps carry arrows and shoot)", arr) != arr) _trapsArmed.Value = !arr;
             }
 
-            GUILayout.Space(8f);
+            }
+
+            if (_tab == 4)
+            {
             GUILayout.Label("Numbers", _head);
             bool num = _numbersEnabled.Value;
             if (Row("Groups, patrols and waves come in a random number", num) != num) _numbersEnabled.Value = !num;
@@ -379,6 +406,7 @@ namespace GHSmartNatives
             GUILayout.Space(8f);
             bool note = _notices.Value;
             if (Row("Show notices on screen", note) != note) _notices.Value = !note;
+            }
 
             GUILayout.EndScrollView();
 
@@ -471,6 +499,14 @@ namespace GHSmartNatives
             _rowBtn.wordWrap = true;
             _rowBtnDim = new GUIStyle(_rowBtn);
             _rowBtnDim.normal.textColor = new Color(0.55f, 0.57f, 0.62f);
+
+            _tabOn = new GUIStyle(GUI.skin.button);
+            _tabOn.fontSize = 15; _tabOn.fontStyle = FontStyle.Bold;
+            _tabOn.normal.textColor = new Color(0.55f, 0.75f, 1f);
+            _tabOn.onNormal = _tabOn.normal;
+            _tabOff = new GUIStyle(GUI.skin.button);
+            _tabOff.fontSize = 15;
+            _tabOff.normal.textColor = new Color(0.7f, 0.72f, 0.76f);
 
             _noticeStyle = new GUIStyle(GUI.skin.label);
             _noticeStyle.fontSize = 18; _noticeStyle.fontStyle = FontStyle.Bold;

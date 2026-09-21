@@ -177,3 +177,17 @@ closed 19:19):
   and the wave timer at zero, and no predator active; the game keeps ONE camp and ONE roaming
   group awake at a time, spawned 30-45 m from him wherever he is. So "no one approached the
   camp" means: no group was spawned near it while he was there, or its scout died first.
+
+## 2026-09-21 - test round on 1.9.2 (live talk, LISTEN)
+1 F4 walks through the invisible wall: OK. 2 strays: none seen, probably OK. 3 fire: waits, no
+fire lit. 5 walking out past 20 m: waits.
+4 FAILED: "A scout sees me, taunts me, and does not run away. It even attacks if I get close
+enough." The log states the cause (lines 15498-15503): the scout saw him at 6 m, my bolt rule
+fired in the same tick (dt < 8 m counts as "approached" the moment it is spotted that close),
+and in that SAME tick the camp went to Attack - another member saw him too. Once the camp is
+in Attack the scout is a fighter: WatchTick runs only while the camp is Calm, so the count
+froze ("killed during its watch, 89 s in"), the taunt is the game's own attack-approach goal,
+and a Spearman has no back-off goal to hold with. Not built yet. To fix on GO: the watch must
+tick whatever the camp's state; a scout in a watch must not be handed the camp's Attack (keep
+it in Rest, its own state), or be excused from the fight; "approached" is relative to the
+distance at the sighting, never absolute.

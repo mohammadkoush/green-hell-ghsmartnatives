@@ -191,3 +191,13 @@ and a Spearman has no back-off goal to hold with. Not built yet. To fix on GO: t
 tick whatever the camp's state; a scout in a watch must not be handed the camp's Attack (keep
 it in Rest, its own state), or be excused from the fight; "approached" is relative to the
 distance at the sighting, never absolute.
+9 high ground: OK. 8 night: he cannot tell from his side; the log shows the switch (night on,
+day back) - stands on that. 7 sense by move style: OK.
+10 "Scouts did not set a trap": the log has ONE - "'Hunter(Clone)' set a spike trap 50 m from
+you - 1 of 6" - set out of his sight, and the only scout that lived long enough. Then the
+scouts were fighting or dead. Needs more: a scout should set one sooner after going out (the
+first is due at once; then every ScoutSetsTrapEverySeconds) - check NextTrapAt starts at 0 -
+and the placement should be nearer his path, not 50 m off.
+Thug: still none seen; the log has one camp attack, number 1 of every 2. Nothing wrong yet.
+13 (neighbour's scout runs to a trap): "a code I can't see" - dropped from his list; the log
+decides it.

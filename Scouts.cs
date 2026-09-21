@@ -43,6 +43,7 @@ namespace GHSmartNatives
         private ConfigEntry<bool>  _scoutSilent;
         private ConfigEntry<bool>  _scoutFires;
         private ConfigEntry<float> _smokeRange;
+        private ConfigEntry<float> _trapNear;
 
         private void BindScoutConfig()
         {
@@ -99,6 +100,9 @@ namespace GHSmartNatives
             // His rule was "the maximum distance of a native", with 40 m as his example of that
             // distance. The game's natives see 10 m, which is no farther than the fire itself - so
             // the number he pictured is the default, and 0 hands it back to the native's own sight.
+            _trapNear = Config.Bind("Scouts", "TrapNearCampMetres", 25f,
+                new ConfigDescription("Scouts set their traps this close to the camp, on the side you were last " +
+                    "seen or heard from - the ground you cross to reach them.", new AcceptableValueRange<float>(6f, 80f)));
             _smokeRange = Config.Bind("Scouts", "SmokeSeenMetres", 40f,
                 new ConfigDescription("How far a scout sees the smoke of a lit fire (the fire itself: its own " +
                     "sight range, 10 m). 0 = the same as its sight.", new AcceptableValueRange<float>(0f, 150f)));
@@ -342,17 +346,47 @@ namespace GHSmartNatives
             if (fwd.sqrMagnitude > 0.01f) m.m_StartForward = fwd.normalized;
             m.m_MoveStyle = Enums.AIMoveStyle.Walk;
 
-            // A trap due, and the world short of them: this step's spot becomes the trap's spot -
-            // the scout walks there and sets it on arrival (PlaceTrapAt tests the spot again).
+            // A trap due, and the world short of them: the scout picks a trap spot, walks there and
+            // sets it on arrival (PlaceTrapAt tests the spot again). His test, 2026-09-21: the one
+            // trap of the session went in 50 m from him, out of sight, on the scout's wide walk. So
+            // the spot is NEAR HIS PATH: between the camp and where the camp last saw or heard him
+            // when it has that, else within TrapNearCampMetres of the camp - the ground he crosses to
+            // get at them - never the far end of the scout's range.
             if (_trapsEnabled.Value && now >= sc.NextTrapAt)
             {
-                string why;
-                if (TrapSpotOk(hit.position, out why))
+                Vector3 spot; string why;
+                if (PickTrapSpot(g, st.Home, out spot) && TrapSpotOk(spot, out why))
                 {
-                    sc.Placing = true; sc.ErrandAt = hit.position; sc.ErrandSince = now; sc.ErrandRun = false;
+                    sc.Placing = true; sc.ErrandAt = spot; sc.ErrandSince = now; sc.ErrandRun = false;
+                    m.m_StartPosition = spot;
+                    Vector3 f2 = spot - here; f2.y = 0f;
+                    if (f2.sqrMagnitude > 0.01f) m.m_StartForward = f2.normalized;
                 }
                 else sc.NextTrapAt = now + 15f;         // not here; look again a few steps on
             }
+            return true;
+        }
+
+        private bool PickTrapSpot(AIs.HumanAIGroup g, Vector3 home, out Vector3 spot)
+        {
+            spot = home;
+            SeenMemo seen;
+            Vector3 toward;
+            if (s_Seen.TryGetValue(g, out seen) && Time.time - seen.At < 1800f) toward = seen.Where;    // his side, half an hour's memory
+            else
+            {
+                float ang = UnityEngine.Random.Range(0f, 360f);
+                toward = home + Quaternion.Euler(0f, ang, 0f) * Vector3.forward * _trapNear.Value;
+            }
+            Vector3 line = toward - home; line.y = 0f;
+            float len = line.magnitude;
+            if (len < 4f) return false;
+            float along = UnityEngine.Random.Range(0.35f, 0.9f) * Mathf.Min(len, _trapNear.Value * 2f);
+            Vector3 side = Vector3.Cross(line.normalized, Vector3.up) * UnityEngine.Random.Range(-4f, 4f);
+            Vector3 want = home + line.normalized * along + side;
+            NavMeshHit hit;
+            if (!NavMesh.SamplePosition(want, out hit, 6f, NavMesh.AllAreas)) return false;
+            spot = hit.position;
             return true;
         }
 
@@ -404,6 +438,33 @@ namespace GHSmartNatives
                 + _scoutWatch.Value.ToString("F0") + " s" + (sc.Unsure > 0 ? " (unsure " + sc.Unsure + " time(s) so far)" : ""));
         }
 
+        /// <summary>From the group tick, in ANY group state: every watching scout counts on, and stays out of the fight.</summary>
+        internal void ScoutWatchTick(AIs.HumanAIGroup g)
+        {
+            if (!_scoutsEnabled.Value || g.m_Members == null || s_Scouts.Count == 0) return;
+            float now = Time.time;
+            Being target = null; bool looked = false;
+            for (int i = 0; i < g.m_Members.Count; i++)
+            {
+                AIs.HumanAI m = g.m_Members[i];
+                ScoutState sc;
+                if (m == null || !s_Scouts.TryGetValue(m, out sc) || sc.WatchSince <= 0f) continue;
+                // Its camp went to Attack and took it along: back to its own state, its enemy gone.
+                if (m.GetState() != AIs.HumanAI.State.Rest)
+                {
+                    try { m.SetState(AIs.HumanAI.State.Rest); } catch (Exception) { }
+                    if (m.m_EnemyModule != null) { m.m_EnemyModule.SetEnemy(null); m.m_EnemyModule.m_PriorityEnemy = null; }
+                    if (s_WatchKeptLogged < 8) { s_WatchKeptLogged++; Logger.LogInfo("scouts: '" + m.name + "' was pulled into its camp's fight mid-watch - kept on its watch instead"); }
+                }
+                if (g.m_State == AIs.HumanAIGroup.State.Calm) continue;      // the calm path (ScoutStep) ticks it
+                if (!looked) { looked = true; target = HuntTarget(); }
+                RoamState st; Vector3 home = m.m_StartPosition;
+                if (_roam.TryGetValue(m, out st)) home = st.Home;
+                WatchTick(g, m, sc, home, target, now);
+            }
+        }
+        private static int s_WatchKeptLogged;
+
         /// <summary>Every tick of a watch: out of the radius = unsure; closing in = bolt; time up = the wave.</summary>
         private void WatchTick(AIs.HumanAIGroup g, AIs.HumanAI m, ScoutState sc, Vector3 home, Being target, float now)
         {
@@ -443,7 +504,9 @@ namespace GHSmartNatives
                 return;
             }
 
-            if (!sc.Bolted && (dt < sc.WatchFrom - 3f || dt < 8f))
+            // Relative only: "approaches" = closer than he was when it saw him. The absolute 8 m
+            // made a scout that saw him at 6 m bolt in the same tick it crouched.
+            if (!sc.Bolted && dt < sc.WatchFrom - 3f)
             {
                 // "If the player notices the scout and approaches it, the scout runs away instantly" -
                 // the count goes on; it is running to stay alive until the count is done.
@@ -583,7 +646,13 @@ namespace GHSmartNatives
                 try
                 {
                     if (!Ours(__instance) || !__instance.m_Active || __instance.m_Members == null) return;
-                    if (__instance.m_State != AIs.HumanAIGroup.State.Calm) return;
+                    // THE TEST OF 2026-09-21: "a scout sees me, taunts me, does not run away, attacks
+                    // if I get close." The log: it saw him at 6 m and in the SAME tick another member
+                    // saw him too, the camp went to Attack, and the scout went with it - a fighter,
+                    // its count frozen at "89 s in". So this runs in EVERY group state now: a scout on
+                    // a watch is kept out of the fight (its enemy cleared, its own state Rest), and
+                    // only a calm camp's scout STARTS a watch here.
+                    bool calm = __instance.m_State == AIs.HumanAIGroup.State.Calm;
                     Being target = null; bool looked = false;
                     for (int i = 0; i < __instance.m_Members.Count; i++)
                     {
@@ -591,12 +660,13 @@ namespace GHSmartNatives
                         if (m == null || m.m_EnemyModule == null || m.m_EnemyModule.m_Enemy == null) continue;
                         ScoutState sc;
                         if (!s_Scouts.TryGetValue(m, out sc)) continue;
+                        if (!calm && sc.WatchSince <= 0f) continue;          // in a fight and not watching: a fighter
                         if (!looked) { looked = true; target = HuntTarget(); }
                         Being e = m.m_EnemyModule.m_Enemy;
                         bool player = (target != null && e == target) || (e.gameObject != null && (GameObjectExtension.IsPlayer(e.gameObject) || e.GetComponentInParent<Player>() != null));
                         if (!player) continue;
                         float now = Time.time;
-                        if (sc.WatchSince <= 0f && now >= sc.RetreatUntil && !HighGroundHides(m, e))
+                        if (calm && sc.WatchSince <= 0f && now >= sc.RetreatUntil && !HighGroundHides(m, e))
                         {
                             RoamState st; Vector3 home = m.m_StartPosition;
                             if (s_Self._roam.TryGetValue(m, out st)) home = st.Home;

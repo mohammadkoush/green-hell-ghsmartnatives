@@ -201,3 +201,11 @@ and the placement should be nearer his path, not 50 m off.
 Thug: still none seen; the log has one camp attack, number 1 of every 2. Nothing wrong yet.
 13 (neighbour's scout runs to a trap): "a code I can't see" - dropped from his list; the log
 decides it.
+
+## 2026-09-21 - GO: 1.9.3
+- The watch ticks in every group state (ScoutWatchTick from the group tick); a scout pulled into
+  its camp's Attack mid-watch is put back to Rest with its enemy cleared, and logged.
+- Bolt is relative only (closer than at the sighting by 3 m); the absolute 8 m is gone.
+- Traps: the first is due at once; the spot is on the line from the camp toward where the camp
+  last saw or heard him (half an hour's memory), 35-90% along, within TrapNearCampMetres (25);
+  with no memory, a random side within that radius. Never the far end of the scout's range.

@@ -547,6 +547,7 @@ namespace GHSmartNatives
                     s_Self.ApplyStealthTo(__instance);
                     s_Self.RoamTick(__instance);
                     s_Self.TacticsTick(__instance);
+                    s_Self.ScoutWatchTick(__instance);
                     if (__instance.m_State == AIs.HumanAIGroup.State.Attack) ReadSenses(__instance, HuntTarget());
                 }
                 catch (Exception ex) { s_Self.HuntLog("group tick failed: " + ex.Message); }

@@ -46,7 +46,7 @@ namespace GHSmartNatives
     {
         public const string Guid    = "com.mohammadkoush.ghsmartnatives";
         public const string Name    = "GHSmartNatives";
-        public const string Version = "1.9.2";
+        public const string Version = "1.9.3";
 
         private static GHSmartNativesPlugin s_Self;
         private Harmony _harmony;
@@ -382,6 +382,7 @@ namespace GHSmartNatives
                 _trapEvery.Value = Slider("A scout sets at most one trap every", _trapEvery.Value, 10f, 600f, " s", 0);
                 _trapClear.Value = Slider("No trap within this of anything you built", _trapClear.Value, 0f, 60f, " m", 0);
                 _trapGap.Value = Slider("No two traps closer than", _trapGap.Value, 2f, 40f, " m", 0);
+                _trapNear.Value = Slider("Scouts set traps this close to camp, on your side", _trapNear.Value, 6f, 80f, " m", 0);
                 _trapLife.Value = Slider("A trap vanishes on its own after", _trapLife.Value, 1f, 240f, " min", 0);
                 _trapTrip.Value = Slider("Standing this close fires it", _trapTrip.Value, 0.5f, 4f, " m", 1);
                 _trapRearm.Value = Slider("A new trap that missed its arming is tried again every", _trapRearm.Value, 2f, 120f, " s", 0);

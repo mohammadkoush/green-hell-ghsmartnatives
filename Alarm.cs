@@ -432,36 +432,45 @@ namespace GHSmartNatives
             }
         }
 
+        // THEIR OWN TRAPS DO NOT BITE THEM. His test, 2026-09-21: "the scout set a trap, and then
+        // it killed itself with that trap" - the log: 'trigger entered by tribe_bow' three times,
+        // then the Hunter, dead. A native knows where its tribe's traps are. So the game's trigger
+        // is refused for anything that is not the player: no native, no thrown bow, no animal.
         [HarmonyPatch(typeof(BowTrap), "OnEnterTrigger")]
         private static class Patch_TrapTripped
         {
-            private static void Prefix(BowTrap __instance, GameObject obj) { Tripped(__instance, obj); }
+            private static bool Prefix(BowTrap __instance, GameObject obj) { return Tripped(__instance, obj); }
         }
 
         [HarmonyPatch(typeof(Spikes), "OnEnterTrigger")]
         private static class Patch_SpikesTripped
         {
-            private static void Prefix(Spikes __instance, GameObject obj) { Tripped(__instance, obj); }
+            private static bool Prefix(Spikes __instance, GameObject obj) { return Tripped(__instance, obj); }
         }
 
-        private static void Tripped(Item __instance, GameObject obj)
+        /// <summary>Returns whether the game's own trigger may run: only for the player, on a native trap.</summary>
+        private static bool Tripped(Item __instance, GameObject obj)
         {
+            if (s_Self == null) return true;
+            try
             {
-                if (s_Self == null) return;
-                try
+                AIs.HumanAIGroup g;
+                if (!s_Traps.TryGetValue(__instance, out g)) return true;          // not ours: the game's business
+                if (obj == null || (!GameObjectExtension.IsPlayer(obj) && obj.GetComponentInParent<Player>() == null))
                 {
-                    AIs.HumanAIGroup g;
-                    if (!s_Traps.TryGetValue(__instance, out g)) return;
-                    if (obj == null || (!GameObjectExtension.IsPlayer(obj) && obj.GetComponentInParent<Player>() == null)) return;
-                    s_TripHandled = true;
-                    float last;
-                    if (s_TrippedAt.TryGetValue(__instance, out last) && Time.time - last < 20f && Time.time - last > 0.5f) return;
-                    s_TrippedAt[__instance] = Time.time;
-                    s_Self.TripResponse(g, __instance, obj.transform.position, "trap tripped");
+                    if (s_NotForThemLogged < 6) { s_NotForThemLogged++; s_Self.Logger.LogInfo("traps: '" + (obj != null ? obj.name : "?") + "' walked onto a native trap - not for them, ignored"); }
+                    return false;
                 }
-                catch (Exception ex) { s_Self.HuntLog("trap trip failed: " + ex.Message); }
+                s_TripHandled = true;
+                float last;
+                if (s_TrippedAt.TryGetValue(__instance, out last) && Time.time - last < 20f && Time.time - last > 0.5f) return true;
+                s_TrippedAt[__instance] = Time.time;
+                s_Self.TripResponse(g, __instance, obj.transform.position, "trap tripped");
             }
+            catch (Exception ex) { s_Self.HuntLog("trap trip failed: " + ex.Message); }
+            return true;
         }
+        private static int s_NotForThemLogged;
 
         // TRIPPED BY DISTANCE AS WELL. His test: "Can't trigger the trap." No 'trap tripped' line in
         // the log. The game's TrapTrigger needs its collider entered; whether that happens on a

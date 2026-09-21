@@ -209,3 +209,11 @@ decides it.
 - Traps: the first is due at once; the spot is on the line from the camp toward where the camp
   last saw or heard him (half an hour's memory), 35-90% along, within TrapNearCampMetres (25);
   with no memory, a random side within that radius. Never the far end of the scout's range.
+
+## 2026-09-21 - test on 1.9.3
+"The scout set a trap, and then it killed itself with that trap." Log: 'trigger entered by
+tribe_bow' x3, then the Hunter dead on its own spikes. 1.9.4: the game's trigger on a native
+trap is refused for anything that is not the player (a native, its bow, an animal) - a native
+knows where its tribe's traps are. Built; deploys when the game closes.
+Also in that log, unasked: "'Savage(Clone)' saw the smoke of 'Campfire_fireside' at 38 m - a
+raid is sent to it; raid of 3 sent to the fire's camp group." The fire raid works (item 3).

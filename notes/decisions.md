@@ -217,3 +217,9 @@ trap is refused for anything that is not the player (a native, its bow, an anima
 knows where its tribe's traps are. Built; deploys when the game closes.
 Also in that log, unasked: "'Savage(Clone)' saw the smoke of 'Campfire_fireside' at 38 m - a
 raid is sent to it; raid of 3 sent to the fire's camp group." The fire raid works (item 3).
+
+## 2026-09-22 - passed on 1.9.4
+The watch survives its camp's attack; scouts silent; a Thug joins the second camp attack; traps
+hold at six across a save and load; the Thug waits then joins when he is surrounded. Left:
+natives walking their own traps, the fourth unsure sighting bringing a wave, and the whole-body
+outline (Pickup Doctor's).

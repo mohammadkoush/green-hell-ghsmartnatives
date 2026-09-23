@@ -223,3 +223,6 @@ The watch survives its camp's attack; scouts silent; a Thug joins the second cam
 hold at six across a save and load; the Thug waits then joins when he is surrounded. Left:
 natives walking their own traps, the fourth unsure sighting bringing a wave, and the whole-body
 outline (Pickup Doctor's).
+All three remaining items passed on 1.9.4 (2026-09-22): natives walk their own traps unharmed,
+the unsure-sighting rule with the fourth bringing a wave, and the whole-body outline. Nothing
+untested is left on GHSmartNatives.
